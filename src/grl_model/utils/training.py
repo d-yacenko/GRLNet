@@ -34,6 +34,8 @@ class ReferenceTrainConfig:
     save_every_epoch: bool = True
     checkpoint_prefix: str = "grl"
     log_json: bool = True
+    progress_log_every_batches: int = 0
+    progress_log_every_samples: int = 0
 
 
 class SmoothedReduceLROnPlateau:
@@ -177,6 +179,21 @@ def _phase_names(dataloaders: dict[str, Any]) -> list[str]:
 
 def _history_key(metric: str, phase: str) -> str:
     return f"{metric}_{phase}"
+
+
+def _should_log_progress(
+    *,
+    batch_idx: int,
+    processed_samples: int,
+    next_batch_threshold: int,
+    next_sample_threshold: int,
+    config: ReferenceTrainConfig,
+) -> bool:
+    if config.progress_log_every_batches > 0 and batch_idx >= next_batch_threshold:
+        return True
+    if config.progress_log_every_samples > 0 and processed_samples >= next_sample_threshold:
+        return True
+    return False
 
 
 def _build_default_transforms(image_size: int = 224, center_crop: bool = False):
@@ -330,8 +347,14 @@ def fit_reference(
 
             running_loss = 0.0
             running_corrects = 0
+            processed_samples = 0
+            phase_started = time.time()
+            total_samples = dataset_sizes[phase]
+            total_batches = len(dataloaders[phase])
+            next_batch_threshold = config.progress_log_every_batches or 0
+            next_sample_threshold = config.progress_log_every_samples or 0
 
-            for inputs, labels in dataloaders[phase]:
+            for batch_idx, (inputs, labels) in enumerate(dataloaders[phase], start=1):
                 if phase == "train" and config.train_gold_prob > 0.0 and random.random() < config.train_gold_prob:
                     inputs = inputs.clone()
                     model.prep_batch(inputs)
@@ -356,6 +379,39 @@ def fit_reference(
 
                 running_loss += loss.item() * inputs.size(0)
                 running_corrects += torch.sum(preds == labels.data).item()
+                processed_samples += inputs.size(0)
+
+                if _should_log_progress(
+                    batch_idx=batch_idx,
+                    processed_samples=processed_samples,
+                    next_batch_threshold=next_batch_threshold,
+                    next_sample_threshold=next_sample_threshold,
+                    config=config,
+                ):
+                    elapsed_phase_sec = time.time() - phase_started
+                    avg_sec_per_sample = elapsed_phase_sec / max(processed_samples, 1)
+                    eta_sec = avg_sec_per_sample * max(total_samples - processed_samples, 0)
+                    progress_record = {
+                        "epoch": epoch + 1,
+                        "phase": phase,
+                        "batch": batch_idx,
+                        "batches_total": total_batches,
+                        "samples_done": processed_samples,
+                        "samples_total": total_samples,
+                        "samples_pct": round(100.0 * processed_samples / max(total_samples, 1), 3),
+                        "elapsed_phase_sec": round(elapsed_phase_sec, 3),
+                        "eta_phase_sec": round(eta_sec, 3),
+                    }
+                    if config.log_json:
+                        print(json.dumps(progress_record))
+                    else:
+                        print(progress_record)
+                    if config.progress_log_every_batches > 0:
+                        while batch_idx >= next_batch_threshold:
+                            next_batch_threshold += config.progress_log_every_batches
+                    if config.progress_log_every_samples > 0:
+                        while processed_samples >= next_sample_threshold:
+                            next_sample_threshold += config.progress_log_every_samples
 
             epoch_loss = running_loss / dataset_sizes[phase]
             epoch_acc = running_corrects / dataset_sizes[phase]
