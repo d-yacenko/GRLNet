@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+message: "If you use this repository, please cite the software entry below."
+title: "GRL Track Classifier"
+type: software
+authors:
+  - family-names: "Yatsenko"
+    given-names: "D."
+repository-code: "https://github.com/your-org/grl-track-classifier"
+abstract: "Track-form ConvLSTM classifier for single-image, multi-view, and grouped-observation recognition."
+license: "MIT"
