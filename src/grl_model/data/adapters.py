@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, List, Optional, Union
 
 import torch
 from PIL import Image
