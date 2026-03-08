@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 import random
 from pathlib import Path
+from typing import Union
 
 import torch
 from PIL import Image
@@ -27,7 +28,7 @@ class SequenceFolderDataset(Dataset):
     а не смоделировать естественную видеопоследовательность.
     """
 
-    def __init__(self, root: str | Path, seq_len: int, allowed_idxs=None, transform=None):
+    def __init__(self, root: Union[str, Path], seq_len: int, allowed_idxs=None, transform=None):
         self.folder = ImageFolder(root)
         self.transform = transform
         self.seq_len = seq_len
@@ -88,7 +89,7 @@ class ImageFolderPseudoTrackDataset(Dataset):
     когда модель при этом всё ещё ожидает входы в формате трека.
     """
 
-    def __init__(self, root: str | Path, *, track_length: int, image_transform=None) -> None:
+    def __init__(self, root: Union[str, Path], *, track_length: int, image_transform=None) -> None:
         self.dataset = ImageFolder(root)
         self.track_length = track_length
         self.image_transform = image_transform
@@ -122,7 +123,7 @@ class TrackFolderDataset(Dataset):
     изображений, описывающих одну и ту же семантическую сущность.
     """
 
-    def __init__(self, root: str | Path, *, track_length: int, image_transform=None) -> None:
+    def __init__(self, root: Union[str, Path], *, track_length: int, image_transform=None) -> None:
         self.root = Path(root)
         self.track_length = track_length
         self.image_transform = image_transform

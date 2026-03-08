@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, Optional, Union
 
 import torch
 from PIL import Image
@@ -16,7 +16,7 @@ from grl_model.data.adapters import (
 )
 
 
-def _infer_device(model: nn.Module, device: torch.device | str | None) -> torch.device:
+def _infer_device(model: nn.Module, device: Optional[Union[torch.device, str]]) -> torch.device:
     if device is not None:
         return torch.device(device)
     try:
@@ -30,7 +30,7 @@ def predict_track(
     model: nn.Module,
     track: Tensor,
     *,
-    device: torch.device | str | None = None,
+    device: Optional[Union[torch.device, str]] = None,
     apply_gold: bool = False,
 ) -> Tensor:
     """Run inference on one track or a batch of tracks. / Выполнить инференс по одному треку или батчу треков.
@@ -64,11 +64,11 @@ def predict_track(
 @torch.inference_mode()
 def predict_image(
     model: nn.Module,
-    image: Image.Image | Tensor,
+    image: Union[Image.Image, Tensor],
     *,
     track_length: int,
     image_transform=None,
-    device: torch.device | str | None = None,
+    device: Optional[Union[torch.device, str]] = None,
     apply_gold: bool = True,
 ) -> Tensor:
     """Run inference on a single image by first building a pseudo-track. / Выполнить инференс по одному изображению через предварительное построение pseudo-track."""
@@ -83,11 +83,11 @@ def predict_image(
 @torch.inference_mode()
 def predict_images(
     model: nn.Module,
-    images: Sequence[Image.Image | Tensor] | Tensor,
+    images: Union[Sequence[Union[Image.Image, Tensor]], Tensor],
     *,
     track_length: int,
     image_transform=None,
-    device: torch.device | str | None = None,
+    device: Optional[Union[torch.device, str]] = None,
     apply_gold: bool = True,
 ) -> Tensor:
     """Run inference on a batch of still images by converting each image to a pseudo-track. / Выполнить инференс по батчу изображений, преобразовав каждое в pseudo-track."""
@@ -102,12 +102,12 @@ def predict_images(
 @torch.inference_mode()
 def predict_group(
     model: nn.Module,
-    images: Sequence[Image.Image | Tensor] | Tensor,
+    images: Union[Sequence[Union[Image.Image, Tensor]], Tensor],
     *,
     track_length: int,
     image_transform: Any = None,
     active_frame_transform: Any = None,
-    device: torch.device | str | None = None,
+    device: Optional[Union[torch.device, str]] = None,
 ) -> Tensor:
     """Run inference on a grouped image observation. / Выполнить инференс по группе изображений, образующих одно наблюдение.
 
@@ -130,13 +130,13 @@ def predict_group(
 @torch.inference_mode()
 def predict_video(
     model: nn.Module,
-    video: str | Any,
+    video: Union[str, Any],
     *,
     track_length: int,
     image_transform: Any = None,
     active_frame_transform: Any = None,
     sampling: str = "uniform",
-    device: torch.device | str | None = None,
+    device: Optional[Union[torch.device, str]] = None,
 ) -> Tensor:
     """Run inference on a video by sampling frames into a track. / Выполнить инференс по видео, выбрав из него кадры и собрав трек.
 

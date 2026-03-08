@@ -10,8 +10,8 @@ from PIL import Image
 from torch import Tensor
 from torchvision.transforms.functional import pil_to_tensor
 
-ImageLike = Image.Image | Tensor
-VideoLike = str | Path | Sequence[ImageLike] | Tensor
+ImageLike = Union[Image.Image, Tensor]
+VideoLike = Union[str, Path, Sequence[ImageLike], Tensor]
 
 
 def _to_tensor_image(image: ImageLike) -> Tensor:
@@ -24,7 +24,7 @@ def _to_tensor_image(image: ImageLike) -> Tensor:
     raise TypeError(f"Unsupported image type: {type(image)!r}")
 
 
-def _normalize_image_group(images: ImageLike | Sequence[ImageLike] | Tensor) -> list[ImageLike]:
+def _normalize_image_group(images: Union[ImageLike, Sequence[ImageLike], Tensor]) -> List[ImageLike]:
     if isinstance(images, Tensor):
         if images.ndim == 3:
             return [images]
@@ -57,11 +57,11 @@ def _select_group_items(items: list[ImageLike], *, target_length: int, sampling:
 
 
 def build_track_from_images(
-    images: ImageLike | Sequence[ImageLike] | Tensor,
+    images: Union[ImageLike, Sequence[ImageLike], Tensor],
     *,
     track_length: int,
-    image_transform: Callable[[Any], Tensor] | None = None,
-    active_frame_transform: Callable[[Tensor], Tensor] | None = None,
+    image_transform: Optional[Callable[[Any], Tensor]] = None,
+    active_frame_transform: Optional[Callable[[Tensor], Tensor]] = None,
     sampling: str = "uniform",
 ) -> Tensor:
     """Convert one image or a grouped image observation into a track. / Преобразовать одно изображение или группу изображений в трек.
@@ -101,8 +101,8 @@ def build_pseudotrack_from_image(
     image: ImageLike,
     *,
     track_length: int,
-    image_transform: Callable[[Any], Tensor] | None = None,
-    active_frame_transform: Callable[[Tensor], Tensor] | None = None,
+    image_transform: Optional[Callable[[Any], Tensor]] = None,
+    active_frame_transform: Optional[Callable[[Tensor], Tensor]] = None,
 ) -> Tensor:
     """Convert one image into a notebook-compatible pseudo-track. / Преобразовать одно изображение в pseudo-track, совместимый с ноутбуком."""
     return build_track_from_images(
@@ -115,11 +115,11 @@ def build_pseudotrack_from_image(
 
 
 def build_pseudotracks_from_images(
-    images: Sequence[ImageLike] | Tensor,
+    images: Union[Sequence[ImageLike], Tensor],
     *,
     track_length: int,
-    image_transform: Callable[[Any], Tensor] | None = None,
-    active_frame_transform: Callable[[Tensor], Tensor] | None = None,
+    image_transform: Optional[Callable[[Any], Tensor]] = None,
+    active_frame_transform: Optional[Callable[[Tensor], Tensor]] = None,
 ) -> Tensor:
     """Convert a batch of images into a batch of pseudo-tracks. / Преобразовать батч изображений в батч pseudo-track.
 
@@ -149,8 +149,8 @@ def build_track_from_video(
     video: VideoLike,
     *,
     track_length: int,
-    image_transform: Callable[[Any], Tensor] | None = None,
-    active_frame_transform: Callable[[Tensor], Tensor] | None = None,
+    image_transform: Optional[Callable[[Any], Tensor]] = None,
+    active_frame_transform: Optional[Callable[[Tensor], Tensor]] = None,
     sampling: str = "uniform",
 ) -> Tensor:
     """Convert a video or pre-decoded frame group into a track. / Преобразовать видео или заранее декодированную группу кадров в трек.
@@ -189,8 +189,8 @@ def build_track_from_video(
 def apply_gold_protocol(
     track_or_batch: Tensor,
     *,
-    frame_transform: Callable[[Tensor], Tensor] | None = None,
-    anchor_index: int | None = None,
+    frame_transform: Optional[Callable[[Tensor], Tensor]] = None,
+    anchor_index: Optional[int] = None,
 ) -> Tensor:
     """Apply the notebook gold protocol to a track tensor on CPU. / Применить gold-протокол ноутбука к тензору трека на CPU.
 

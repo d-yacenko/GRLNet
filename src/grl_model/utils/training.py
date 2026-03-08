@@ -6,7 +6,7 @@ import random
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -57,7 +57,7 @@ class SmoothedReduceLROnPlateau:
         self.verbose = verbose
         self.mode = mode
         self.loss_history: list[float] = []
-        self.best_smoothed: float | None = None
+        self.best_smoothed: Optional[float] = None
         self.num_bad_epochs = 0
 
     def step(self, epoch: int, current_loss: float) -> None:
@@ -203,14 +203,14 @@ def _build_default_transforms(image_size: int = 224, center_crop: bool = False):
     return transforms.Compose(train_ops), transforms.Compose(eval_ops)
 
 
-def _stratified_split_indices(all_idxs: list[int], all_labels: list[int], test_size: float, random_state: int) -> tuple[list[int], list[int]]:
+def _stratified_split_indices(all_idxs: List[int], all_labels: List[int], test_size: float, random_state: int) -> Tuple[List[int], List[int]]:
     rng = random.Random(random_state)
-    by_label: dict[int, list[int]] = {}
+    by_label: Dict[int, List[int]] = {}
     for idx, label in zip(all_idxs, all_labels):
         by_label.setdefault(label, []).append(idx)
 
-    train_idxs: list[int] = []
-    test_idxs: list[int] = []
+    train_idxs: List[int] = []
+    test_idxs: List[int] = []
     for label in sorted(by_label):
         idxs = list(by_label[label])
         rng.shuffle(idxs)
@@ -224,7 +224,7 @@ def _stratified_split_indices(all_idxs: list[int], all_labels: list[int], test_s
     return train_idxs, test_idxs
 
 
-def _random_split_indices(indices: list[int], test_size: float, random_state: int) -> tuple[list[int], list[int]]:
+def _random_split_indices(indices: List[int], test_size: float, random_state: int) -> Tuple[List[int], List[int]]:
     rng = random.Random(random_state)
     idxs = list(indices)
     rng.shuffle(idxs)
@@ -264,14 +264,14 @@ def fit_reference(
     model: nn.Module,
     dataloaders: dict[str, Any],
     *,
-    dataset_sizes: dict[str, int] | None = None,
-    criterion: nn.Module | None = None,
-    optimizer: torch.optim.Optimizer | None = None,
-    scheduler: SmoothedReduceLROnPlateau | None = None,
-    device: torch.device | None = None,
-    config: ReferenceTrainConfig | None = None,
-    output_dir: str | Path | None = None,
-    class_names: list[str] | None = None,
+    dataset_sizes: Optional[Dict[str, int]] = None,
+    criterion: Optional[nn.Module] = None,
+    optimizer: Optional[torch.optim.Optimizer] = None,
+    scheduler: Optional[SmoothedReduceLROnPlateau] = None,
+    device: Optional[torch.device] = None,
+    config: Optional[ReferenceTrainConfig] = None,
+    output_dir: Optional[Union[str, Path]] = None,
+    class_names: Optional[List[str]] = None,
 ) -> ReferenceTrainResult:
     """Run the reference training loop on caller-provided dataloaders. / Запустить reference training loop на переданных dataloader'ах.
 
@@ -306,7 +306,7 @@ def fit_reference(
     scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
     torch.backends.cudnn.benchmark = bool(config.benchmark)
 
-    history: dict[str, list[float]] = {}
+    history: Dict[str, List[float]] = {}
     for phase in phases:
         history[_history_key("loss", phase)] = []
         history[_history_key("acc", phase)] = []
@@ -427,8 +427,8 @@ def fit_reference(
 def fit_reference_imagefolders(
     model: nn.Module,
     *,
-    data_root: str | Path,
-    eval_root: str | Path | None = None,
+    data_root: Union[str, Path],
+    eval_root: Optional[Union[str, Path]] = None,
     track_length: int,
     batch_size: int = 64,
     workers: int = 8,
@@ -439,9 +439,9 @@ def fit_reference_imagefolders(
     random_state: int = 42,
     train_transform=None,
     eval_transform=None,
-    device: torch.device | None = None,
-    config: ReferenceTrainConfig | None = None,
-    output_dir: str | Path | None = None,
+    device: Optional[torch.device] = None,
+    config: Optional[ReferenceTrainConfig] = None,
+    output_dir: Optional[Union[str, Path]] = None,
 ) -> ReferenceTrainResult:
     """Run the canonical GRL training recipe on ImageFolder-style data. / Запустить канонический GRL-рецепт обучения на данных в стиле ImageFolder.
 

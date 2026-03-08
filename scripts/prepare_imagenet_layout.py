@@ -45,7 +45,10 @@ def reorganize_flat_val(val_stage: Path, val_root: Path, val_ground_truth: Path,
         shutil.move(str(image_path), str(dst_dir / image_path.name))
 
 
-def build_val_layout(val_archive: Path, val_root: Path, tmp_root: Path, val_ground_truth: Path | None, wnids_file: Path | None) -> None:
+from typing import Optional
+
+
+def build_val_layout(val_archive: Path, val_root: Path, tmp_root: Path, val_ground_truth: Optional[Path], wnids_file: Optional[Path]) -> None:
     stage_root = tmp_root / "val_stage"
     extract_tar(val_archive, stage_root)
 
