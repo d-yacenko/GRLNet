@@ -1,0 +1,24 @@
+#!/bin/bash
+#SBATCH --job-name=gpu_probe_hydra_gpu2
+#SBATCH -p gpunode
+#SBATCH --nodelist=hydra-gpu2
+#SBATCH --gres=gpu:1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=4GB
+#SBATCH -t 0-00:10:00
+#SBATCH -o slurm-%j.out
+
+set -euo pipefail
+
+echo "job_id=$SLURM_JOB_ID"
+echo "node=$(hostname)"
+echo "partition=$SLURM_JOB_PARTITION"
+echo "visible_devices=${CUDA_VISIBLE_DEVICES:-unset}"
+echo "hostlist=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | tr '\n' ' ')"
+
+echo "=== nvidia-smi -L ==="
+nvidia-smi -L || true
+
+echo "=== nvidia-smi ==="
+nvidia-smi || true

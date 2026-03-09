@@ -1,0 +1,54 @@
+# GRLNet ImageNet Recipe
+
+This directory is the production/cluster lane for GRLNet.
+
+Principles:
+- `src/grl_model/*` stays academic and reference-oriented
+- `recipes/imagenet/*` is the public large-scale training stack
+- training semantics remain the same:
+  - `train` phase uses `train_root`
+  - `val` phase uses `eval_root`
+  - `gold` phase uses `eval_root`
+
+## What is implemented now
+
+- explicit config-driven training via `train.py`
+- single-GPU and `torchrun`-based DDP bootstrap
+- JSONL progress logging for long cluster jobs
+- GPU memory logging for batch-size tuning
+- `latest` and `best` checkpoints
+- resume from checkpoint path or `resume_from: auto`
+
+## Smoke test target
+
+The initial production smoke test is:
+- ImageNet-style `train/` and `val/`
+- `2 x T4`
+- `5 epochs`
+- progress logging during training
+- checkpoint/resume enabled
+
+## Example
+
+```bash
+torchrun --standalone --nproc_per_node=2 recipes/imagenet/train.py \
+  --config recipes/imagenet/configs/grl_t4_ddp_smoke.yaml \
+  --train-root /data/imagenet/train \
+  --eval-root /data/imagenet/val \
+  --output-dir /data/runs/grlnet_t4_smoke
+```
+
+Important notes:
+- `eval_on_main_rank_only: true` is currently the default for DDP smoke runs
+- this keeps validation/gold metrics exact and makes `best` checkpointing simpler
+- the main throughput bottlenecks are still in the data pipeline and CPU-side gold path
+
+## Files
+
+- `train.py`: production entrypoint
+- `engine.py`: train/eval loop
+- `dist.py`: DDP bootstrap/helpers
+- `checkpointing.py`: checkpoint/resume helpers
+- `data_pipeline.py`: recipe-side dataloader builder
+- `configs/*.yaml`: example configs
+- `launch/*.sh`: Slurm launch examples

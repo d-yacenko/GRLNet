@@ -1,6 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=grl_imagenet_t4_1e
 #SBATCH -p gpu_T4
+#SBATCH --nodelist=hydra-gpu1
 #SBATCH --gres=gpu:1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=8
