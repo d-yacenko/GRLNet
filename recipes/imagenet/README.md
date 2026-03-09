@@ -28,6 +28,21 @@ The initial production smoke test is:
 - progress logging during training
 - checkpoint/resume enabled
 
+On the currently visible Hydra T4 pool, the directly confirmed unique nodes are:
+- `hydra-gpu1`
+- `hydra-gpu2`
+- `hydra-gpu3`
+
+There is a Slurm launcher for the current `3 x T4` setup with `1 GPU per node`:
+- `recipes/imagenet/launch/slurm_t4_3node_ddp_smoke.sh`
+- it pins `hydra-gpu1,hydra-gpu2,hydra-gpu3`
+- it uses `recipes/imagenet/configs/grl_t4_3node_smoke.yaml`
+
+There is also a Slurm launcher for `4 x T4` with `1 GPU per node`:
+- `recipes/imagenet/launch/slurm_t4_4node_ddp_smoke.sh`
+- it launches one DDP rank per node via `srun`
+- progress and checkpoint logs still go to a single output directory on rank 0
+
 ## Example
 
 ```bash

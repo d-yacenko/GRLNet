@@ -7,7 +7,8 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32GB
 #SBATCH -t 0-08:00:00
-#SBATCH -o slurm-%j.out
+#SBATCH -o /home/faenna/grl/slurm-%j.out
+#SBATCH -D /home/faenna/grl/GRLNet
 
 set -euo pipefail
 

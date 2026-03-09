@@ -8,7 +8,7 @@ data:
   image_size: 224
   center_crop: true
   per_gpu_batch_size: 4
-  workers: 8
+  workers: 6
   persistent_workers: true
   prefetch_factor: 2
   pin_memory: true
@@ -36,14 +36,14 @@ scheduler:
   mode: min
 
 logging:
-  progress_every_batches: 50
+  progress_every_batches: 25
   progress_every_samples: 0
   jsonl_filename: progress.jsonl
   log_json: true
 
 checkpointing:
-  output_dir: runs/grl_imagenet_t4_ddp_smoke
-  checkpoint_prefix: grl_t4_ddp_smoke
+  output_dir: runs/grl_imagenet_t4_3node_smoke
+  checkpoint_prefix: grl_t4_3node_smoke
   save_every_epoch: true
   save_best: true
   resume_from: auto

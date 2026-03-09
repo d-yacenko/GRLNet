@@ -7,7 +7,7 @@ data:
   eval_root: /data/imagenet/val
   image_size: 224
   center_crop: true
-  per_gpu_batch_size: 6
+  per_gpu_batch_size: 4
   workers: 8
   persistent_workers: true
   prefetch_factor: 2
