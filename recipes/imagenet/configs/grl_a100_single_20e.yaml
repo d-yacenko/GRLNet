@@ -1,0 +1,55 @@
+model:
+  name: grl_base
+  track_length: 10
+
+data:
+  train_root: /home/faenna/grl/image-net1000/layout/train
+  eval_root: /home/faenna/grl/image-net1000/layout/val
+  image_size: 224
+  center_crop: true
+  per_gpu_batch_size: 32
+  workers: 12
+  persistent_workers: true
+  prefetch_factor: 2
+  pin_memory: true
+  drop_last_train: true
+
+train:
+  epochs: 20
+  grad_accum_steps: 1
+  train_gold_prob: 0.5
+  use_amp: true
+  benchmark: true
+  eval_on_main_rank_only: false
+
+optimizer:
+  lr: 0.001
+  weight_decay: 0.01
+  bias_weight_decay: 0.0
+
+scheduler:
+  factor: 0.7
+  patience: 9
+  start_epoch: 15
+  window_size: 70
+  min_lr: 0.0001
+  mode: min
+
+logging:
+  progress_every_batches: 50
+  progress_every_samples: 0
+  jsonl_filename: progress.jsonl
+  log_json: true
+
+checkpointing:
+  output_dir: /home/faenna/grl/runs/grlnet_a100_single_20e
+  checkpoint_prefix: grl_a100_single_20e
+  save_every_epoch: true
+  save_best: true
+  resume_from: auto
+
+runtime:
+  seed: 42
+  device: cuda
+  ddp_backend: nccl
+  tf32: true

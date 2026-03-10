@@ -43,6 +43,12 @@ There is also a Slurm launcher for `4 x T4` with `1 GPU per node`:
 - it launches one DDP rank per node via `srun`
 - progress and checkpoint logs still go to a single output directory on rank 0
 
+There is a single-GPU A100 training launcher for a longer production run:
+- `recipes/imagenet/launch/slurm_a100_single_20e.sh`
+- it uses `recipes/imagenet/configs/grl_a100_single_20e.yaml`
+- default dataset roots are `/home/faenna/grl/image-net1000/layout/train` and `/home/faenna/grl/image-net1000/layout/val`
+- it saves checkpoints and `progress.jsonl` to `/home/faenna/grl/runs/grlnet_a100_single_20e`
+
 ## Example
 
 ```bash
