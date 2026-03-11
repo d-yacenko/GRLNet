@@ -22,6 +22,18 @@ class DistributedContext:
         return self.rank == 0
 
 
+def _resolve_single_process_device(device_name: Optional[str]) -> torch.device:
+    if device_name is None:
+        if torch.cuda.is_available():
+            return torch.device("cuda:0")
+        return torch.device("cpu")
+
+    device = torch.device(device_name)
+    if device.type == "cuda" and device.index is None:
+        return torch.device("cuda:0")
+    return device
+
+
 def init_distributed(device_name: Optional[str], backend: str) -> DistributedContext:
     world_size = int(os.environ.get("WORLD_SIZE", "1"))
     rank = int(os.environ.get("RANK", "0"))
@@ -43,12 +55,9 @@ def init_distributed(device_name: Optional[str], backend: str) -> DistributedCon
             device=device,
         )
 
-    if device_name is None:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    else:
-        device = torch.device(device_name)
+    device = _resolve_single_process_device(device_name)
     if device.type == "cuda" and torch.cuda.is_available():
-        torch.cuda.set_device(device)
+        torch.cuda.set_device(device.index if device.index is not None else 0)
     return DistributedContext(
         enabled=False,
         rank=0,
