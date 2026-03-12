@@ -14,8 +14,8 @@ set -euo pipefail
 
 REPO_DIR="${REPO_DIR:-$HOME/grl/GRLNet}"
 VENV_ACTIVATE="${VENV_ACTIVATE:-$HOME/grl/torch/bin/activate}"
-TRAIN_ROOT="${TRAIN_ROOT:-/data/imagenet/train}"
-EVAL_ROOT="${EVAL_ROOT:-/data/imagenet/val}"
+TRAIN_ROOT="${TRAIN_ROOT:-/home/faenna/grl/image-net1000/layout/train}"
+EVAL_ROOT="${EVAL_ROOT:-/home/faenna/grl/image-net1000/layout/val}"
 OUTPUT_DIR="${OUTPUT_DIR:-$HOME/grl/runs/grlnet_t4_single_smoke}"
 CONFIG_PATH="${CONFIG_PATH:-$REPO_DIR/recipes/imagenet/configs/grl_t4_single_smoke.yaml}"
 
@@ -24,6 +24,9 @@ source "$VENV_ACTIVATE"
 
 export PYTHONUNBUFFERED=1
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-8}"
+export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-/home/faenna/grl/.config}"
+export MPLCONFIGDIR="${MPLCONFIGDIR:-/home/faenna/grl/.config/matplotlib}"
+mkdir -p "$XDG_CONFIG_HOME" "$MPLCONFIGDIR"
 
 nvidia-smi
 

@@ -3,8 +3,8 @@ model:
   track_length: 10
 
 data:
-  train_root: /data/imagenet/train
-  eval_root: /data/imagenet/val
+  train_root: /home/faenna/grl/image-net1000/layout/train
+  eval_root: /home/faenna/grl/image-net1000/layout/val
   image_size: 224
   center_crop: true
   per_gpu_batch_size: 4
@@ -42,7 +42,7 @@ logging:
   log_json: true
 
 checkpointing:
-  output_dir: runs/grl_imagenet_t4_ddp_smoke
+  output_dir: /home/faenna/grl/runs/grlnet_t4_ddp_smoke
   checkpoint_prefix: grl_t4_ddp_smoke
   save_every_epoch: true
   save_best: true
