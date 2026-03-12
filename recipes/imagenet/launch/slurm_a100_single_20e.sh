@@ -23,6 +23,7 @@ source "$VENV_ACTIVATE"
 
 export PYTHONUNBUFFERED=1
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-8}"
+export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
 
 nvidia-smi || true
 nvidia-smi -L || true
