@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from datetime import timedelta
 from dataclasses import dataclass
 from typing import Optional
 
@@ -34,7 +35,7 @@ def _resolve_single_process_device(device_name: Optional[str]) -> torch.device:
     return device
 
 
-def init_distributed(device_name: Optional[str], backend: str) -> DistributedContext:
+def init_distributed(device_name: Optional[str], backend: str, timeout_minutes: int = 60) -> DistributedContext:
     world_size = int(os.environ.get("WORLD_SIZE", "1"))
     rank = int(os.environ.get("RANK", "0"))
     local_rank = int(os.environ.get("LOCAL_RANK", "0"))
@@ -46,7 +47,11 @@ def init_distributed(device_name: Optional[str], backend: str) -> DistributedCon
             raise RuntimeError("DDP recipe requested but CUDA is not available")
         torch.cuda.set_device(local_rank)
         device = torch.device(f"cuda:{local_rank}")
-        dist.init_process_group(backend=backend, init_method="env://")
+        dist.init_process_group(
+            backend=backend,
+            init_method="env://",
+            timeout=timedelta(minutes=timeout_minutes),
+        )
         return DistributedContext(
             enabled=True,
             rank=rank,
@@ -91,7 +96,10 @@ def unwrap_model(model: torch.nn.Module) -> torch.nn.Module:
 
 def barrier(ctx: DistributedContext) -> None:
     if ctx.enabled:
-        dist.barrier()
+        if ctx.device.type == "cuda":
+            dist.barrier(device_ids=[ctx.local_rank])
+        else:
+            dist.barrier()
 
 
 def destroy_distributed(ctx: DistributedContext) -> None:

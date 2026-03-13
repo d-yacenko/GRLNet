@@ -77,6 +77,7 @@ class RuntimeConfig:
     seed: int = 42
     device: str = "cuda"
     ddp_backend: str = "nccl"
+    ddp_timeout_minutes: int = 60
     tf32: bool = True
 
 

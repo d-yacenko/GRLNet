@@ -96,7 +96,11 @@ def main() -> None:
     args = parse_args()
     config = apply_overrides(load_recipe_config(args.config), args)
 
-    ctx = init_distributed(config.runtime.device, config.runtime.ddp_backend)
+    ctx = init_distributed(
+        config.runtime.device,
+        config.runtime.ddp_backend,
+        timeout_minutes=config.runtime.ddp_timeout_minutes,
+    )
     try:
         set_recipe_seed(config.runtime.seed)
         configure_runtime(config, ctx.device)

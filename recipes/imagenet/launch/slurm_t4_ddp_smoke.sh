@@ -26,7 +26,10 @@ export PYTHONUNBUFFERED=1
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-8}"
 export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-/home/faenna/grl/.config}"
 export MPLCONFIGDIR="${MPLCONFIGDIR:-/home/faenna/grl/.config/matplotlib}"
+export XDG_CACHE_HOME="${XDG_CACHE_HOME:-/home/faenna/grl/.cache}"
+export TORCH_HOME="${TORCH_HOME:-/home/faenna/grl/.cache/torch}"
 mkdir -p "$XDG_CONFIG_HOME" "$MPLCONFIGDIR"
+mkdir -p "$XDG_CACHE_HOME" "$TORCH_HOME"
 
 nvidia-smi
 
