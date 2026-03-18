@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import random
 import time
 from pathlib import Path
@@ -9,6 +10,7 @@ from typing import Any, Optional
 import torch
 from torch import nn
 
+from grl_model.data.adapters import apply_gold_protocol
 from grl_model.utils import ReferenceTrainConfig, SmoothedReduceLROnPlateau, build_reference_optimizer
 
 from .checkpointing import build_checkpoint_state, save_checkpoints
@@ -69,7 +71,7 @@ def _should_log_progress(
 
 
 def _phase_summary_record(epoch: int, phase: str, metrics: dict[str, float], lr: float) -> dict[str, Any]:
-    return {
+    record = {
         "event": "phase_summary",
         "epoch": epoch + 1,
         "phase": phase,
@@ -78,6 +80,19 @@ def _phase_summary_record(epoch: int, phase: str, metrics: dict[str, float], lr:
         "num_samples": metrics["num_samples"],
         "lr": lr,
     }
+    for key in ("loss_main", "loss_aux"):
+        if key in metrics:
+            record[key] = metrics[key]
+    for key in (
+        "grad_norm_preclip_mean",
+        "grad_norm_preclip_max",
+        "grad_norm_postclip_mean",
+        "grad_clip_frac",
+        "grad_nonfinite_batches",
+    ):
+        if key in metrics:
+            record[key] = metrics[key]
+    return record
 
 
 def train_one_epoch(
@@ -97,6 +112,8 @@ def train_one_epoch(
     optimizer.zero_grad(set_to_none=True)
 
     running_loss = 0.0
+    running_loss_main = 0.0
+    running_loss_aux = 0.0
     running_corrects = 0.0
     running_samples = 0
     phase_started = time.time()
@@ -104,33 +121,64 @@ def train_one_epoch(
     total_batches = len(loader)
     next_batch_threshold = config.logging.progress_every_batches or 0
     next_sample_threshold = config.logging.progress_every_samples or 0
+    grad_norm_preclip_sum = 0.0
+    grad_norm_postclip_sum = 0.0
+    grad_norm_preclip_max = 0.0
+    grad_clip_steps = 0
+    grad_nonfinite_steps = 0
 
     for batch_idx, (inputs, labels) in enumerate(loader, start=1):
         data_time_sec = time.time() - last_step_ended
 
         apply_gold = config.train.train_gold_prob > 0.0 and random.random() < config.train.train_gold_prob
         if apply_gold:
-            inputs = inputs.clone()
-            unwrap_model(model).prep_batch(inputs)
+            inputs = apply_gold_protocol(inputs)
 
         inputs = inputs.to(ctx.device, non_blocking=True)
         labels = labels.to(ctx.device, non_blocking=True)
 
         with torch.amp.autocast("cuda", enabled=config.train.use_amp and ctx.device.type == "cuda"):
-            logits = model(inputs)
-            raw_loss = criterion(logits, labels)
+            if config.train.aux_h_loss_weight > 0.0:
+                logits, aux_logits = model(inputs, return_aux=True)
+                raw_loss_main = criterion(logits, labels)
+                raw_loss_aux = criterion(aux_logits, labels)
+                raw_loss = raw_loss_main + config.train.aux_h_loss_weight * raw_loss_aux
+            else:
+                logits = model(inputs)
+                raw_loss_main = criterion(logits, labels)
+                raw_loss_aux = None
+                raw_loss = raw_loss_main
             loss = raw_loss / max(config.train.grad_accum_steps, 1)
 
         preds = logits.argmax(dim=1)
         scaler.scale(loss).backward()
 
         if batch_idx % max(config.train.grad_accum_steps, 1) == 0 or batch_idx == total_batches:
+            if config.train.gradient_clip_norm is not None:
+                scaler.unscale_(optimizer)
+                total_norm_tensor = torch.nn.utils.clip_grad_norm_(
+                    model.parameters(),
+                    max_norm=config.train.gradient_clip_norm,
+                    error_if_nonfinite=False,
+                )
+                total_norm = float(total_norm_tensor.item())
+                if math.isfinite(total_norm):
+                    grad_norm_preclip_sum += total_norm
+                    grad_norm_preclip_max = max(grad_norm_preclip_max, total_norm)
+                    grad_norm_postclip_sum += min(total_norm, config.train.gradient_clip_norm)
+                    if total_norm > config.train.gradient_clip_norm:
+                        grad_clip_steps += 1
+                else:
+                    grad_nonfinite_steps += 1
             scaler.step(optimizer)
             scaler.update()
             optimizer.zero_grad(set_to_none=True)
 
         batch_size = labels.size(0)
         running_loss += raw_loss.detach().item() * batch_size
+        running_loss_main += raw_loss_main.detach().item() * batch_size
+        if raw_loss_aux is not None:
+            running_loss_aux += raw_loss_aux.detach().item() * batch_size
         running_corrects += (preds == labels).sum().item()
         running_samples += batch_size
         global_step += 1
@@ -173,10 +221,20 @@ def train_one_epoch(
     sample_sum = reduce_sum(float(running_samples), ctx)
     metrics = {
         "loss": loss_sum / max(sample_sum, 1.0),
+        "loss_main": running_loss_main / max(running_samples, 1),
         "acc": correct_sum / max(sample_sum, 1.0),
         "num_samples": sample_sum,
         "elapsed_sec": time.time() - phase_started,
     }
+    if config.train.aux_h_loss_weight > 0.0:
+        metrics["loss_aux"] = running_loss_aux / max(running_samples, 1)
+    if config.train.gradient_clip_norm is not None:
+        step_den = max(math.ceil(total_batches / max(config.train.grad_accum_steps, 1)), 1)
+        metrics["grad_norm_preclip_mean"] = grad_norm_preclip_sum / step_den
+        metrics["grad_norm_preclip_max"] = grad_norm_preclip_max
+        metrics["grad_norm_postclip_mean"] = grad_norm_postclip_sum / step_den
+        metrics["grad_clip_frac"] = grad_clip_steps / step_den
+        metrics["grad_nonfinite_batches"] = float(grad_nonfinite_steps)
     return metrics, global_step
 
 
@@ -197,30 +255,46 @@ def evaluate_phase(
         random.seed(config.runtime.seed + 20000 + epoch)
 
     loss_sum = 0.0
+    loss_main_sum = 0.0
+    loss_aux_sum = 0.0
     correct_sum = 0.0
     sample_sum = 0
     started = time.time()
     with torch.inference_mode():
         for inputs, labels in loader:
             if phase == "gold":
-                inputs = inputs.clone()
-                eval_model.prep_batch(inputs)
+                inputs = apply_gold_protocol(inputs)
 
             inputs = inputs.to(ctx.device, non_blocking=True)
             labels = labels.to(ctx.device, non_blocking=True)
             with torch.amp.autocast("cuda", enabled=config.train.use_amp and ctx.device.type == "cuda"):
-                logits = eval_model(inputs)
-                loss = criterion(logits, labels)
+                if config.train.aux_h_loss_weight > 0.0:
+                    logits, aux_logits = eval_model(inputs, return_aux=True)
+                    loss_main = criterion(logits, labels)
+                    loss_aux = criterion(aux_logits, labels)
+                    loss = loss_main + config.train.aux_h_loss_weight * loss_aux
+                else:
+                    logits = eval_model(inputs)
+                    loss_main = criterion(logits, labels)
+                    loss_aux = None
+                    loss = loss_main
             batch_size = labels.size(0)
             loss_sum += loss.item() * batch_size
+            loss_main_sum += loss_main.item() * batch_size
+            if loss_aux is not None:
+                loss_aux_sum += loss_aux.item() * batch_size
             correct_sum += (logits.argmax(dim=1) == labels).sum().item()
             sample_sum += batch_size
-    return {
+    metrics = {
         "loss": loss_sum / max(sample_sum, 1),
+        "loss_main": loss_main_sum / max(sample_sum, 1),
         "acc": correct_sum / max(sample_sum, 1),
         "num_samples": sample_sum,
         "elapsed_sec": time.time() - started,
     }
+    if config.train.aux_h_loss_weight > 0.0:
+        metrics["loss_aux"] = loss_aux_sum / max(sample_sum, 1)
+    return metrics
 
 
 def run_training(
@@ -246,12 +320,39 @@ def run_training(
     if history is None:
         history = {
             "loss_train": [],
+            "loss_main_train": [],
             "acc_train": [],
             "loss_val": [],
+            "loss_main_val": [],
             "acc_val": [],
             "loss_gold": [],
+            "loss_main_gold": [],
             "acc_gold": [],
         }
+        if config.train.aux_h_loss_weight > 0.0:
+            history["loss_aux_train"] = []
+            history["loss_aux_val"] = []
+            history["loss_aux_gold"] = []
+        if config.train.gradient_clip_norm is not None:
+            history["grad_norm_preclip_mean_train"] = []
+            history["grad_norm_preclip_max_train"] = []
+            history["grad_norm_postclip_mean_train"] = []
+            history["grad_clip_frac_train"] = []
+            history["grad_nonfinite_batches_train"] = []
+    else:
+        history.setdefault("loss_main_train", [])
+        history.setdefault("loss_main_val", [])
+        history.setdefault("loss_main_gold", [])
+        if config.train.aux_h_loss_weight > 0.0:
+            history.setdefault("loss_aux_train", [])
+            history.setdefault("loss_aux_val", [])
+            history.setdefault("loss_aux_gold", [])
+        if config.train.gradient_clip_norm is not None:
+            history.setdefault("grad_norm_preclip_mean_train", [])
+            history.setdefault("grad_norm_preclip_max_train", [])
+            history.setdefault("grad_norm_postclip_mean_train", [])
+            history.setdefault("grad_clip_frac_train", [])
+            history.setdefault("grad_nonfinite_batches_train", [])
 
     started = time.time()
     for epoch in range(start_epoch, config.train.epochs):
@@ -271,14 +372,23 @@ def run_training(
             progress_path=progress_path,
         )
         history["loss_train"].append(float(train_metrics["loss"]))
+        history["loss_main_train"].append(float(train_metrics["loss_main"]))
         history["acc_train"].append(float(train_metrics["acc"]))
+        if config.train.aux_h_loss_weight > 0.0:
+            history["loss_aux_train"].append(float(train_metrics["loss_aux"]))
+        if config.train.gradient_clip_norm is not None:
+            history["grad_norm_preclip_mean_train"].append(float(train_metrics["grad_norm_preclip_mean"]))
+            history["grad_norm_preclip_max_train"].append(float(train_metrics["grad_norm_preclip_max"]))
+            history["grad_norm_postclip_mean_train"].append(float(train_metrics["grad_norm_postclip_mean"]))
+            history["grad_clip_frac_train"].append(float(train_metrics["grad_clip_frac"]))
+            history["grad_nonfinite_batches_train"].append(float(train_metrics["grad_nonfinite_batches"]))
 
         if hasattr(dataloaders["train"].dataset, "on_epoch_end"):
             random.seed(config.runtime.seed + 10000 + epoch)
             dataloaders["train"].dataset.on_epoch_end()
 
-        val_metrics = {"loss": float("nan"), "acc": float("nan"), "num_samples": 0.0}
-        gold_metrics = {"loss": float("nan"), "acc": float("nan"), "num_samples": 0.0}
+        val_metrics = {"loss": float("nan"), "loss_main": float("nan"), "acc": float("nan"), "num_samples": 0.0}
+        gold_metrics = {"loss": float("nan"), "loss_main": float("nan"), "acc": float("nan"), "num_samples": 0.0}
 
         if ctx.enabled and config.train.eval_on_main_rank_only:
             barrier(ctx)
@@ -301,7 +411,7 @@ def run_training(
                     ctx=ctx,
                     epoch=epoch,
                 )
-            val_loss_for_scheduler = broadcast_float(val_metrics["loss"] if ctx.is_main_process else 0.0, ctx)
+            val_loss_for_scheduler = broadcast_float(val_metrics["loss_main"] if ctx.is_main_process else 0.0, ctx)
             barrier(ctx)
         else:
             val_metrics = evaluate_phase(
@@ -322,23 +432,28 @@ def run_training(
                 ctx=ctx,
                 epoch=epoch,
             )
-            val_loss_for_scheduler = float(val_metrics["loss"])
+            val_loss_for_scheduler = float(val_metrics["loss_main"])
 
         scheduler.step(epoch, val_loss_for_scheduler)
 
         if ctx.is_main_process:
             history["loss_val"].append(float(val_metrics["loss"]))
+            history["loss_main_val"].append(float(val_metrics["loss_main"]))
             history["acc_val"].append(float(val_metrics["acc"]))
             history["loss_gold"].append(float(gold_metrics["loss"]))
+            history["loss_main_gold"].append(float(gold_metrics["loss_main"]))
             history["acc_gold"].append(float(gold_metrics["acc"]))
+            if config.train.aux_h_loss_weight > 0.0:
+                history["loss_aux_val"].append(float(val_metrics["loss_aux"]))
+                history["loss_aux_gold"].append(float(gold_metrics["loss_aux"]))
 
             append_jsonl(progress_path, _phase_summary_record(epoch, "train", train_metrics, optimizer.param_groups[0]["lr"]))
             append_jsonl(progress_path, _phase_summary_record(epoch, "val", val_metrics, optimizer.param_groups[0]["lr"]))
             append_jsonl(progress_path, _phase_summary_record(epoch, "gold", gold_metrics, optimizer.param_groups[0]["lr"]))
 
-            is_best = val_metrics["loss"] < best_val_loss
+            is_best = val_metrics["loss_main"] < best_val_loss
             if is_best:
-                best_val_loss = float(val_metrics["loss"])
+                best_val_loss = float(val_metrics["loss_main"])
                 best_val_acc = float(val_metrics["acc"])
 
             checkpoint_state = build_checkpoint_state(

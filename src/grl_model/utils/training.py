@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
+import math
 import random
 import time
 from dataclasses import asdict, dataclass
@@ -12,6 +13,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from torch import Tensor, nn
+from grl_model.data.adapters import apply_gold_protocol
 from grl_model.data.datasets import SequenceFolderDataset
 
 
@@ -29,6 +31,7 @@ class ReferenceTrainConfig:
     scheduler_window_size: int = 70
     scheduler_min_lr: float = 1e-4
     scheduler_mode: str = "min"
+    gradient_clip_norm: Optional[float] = 20.0
     use_amp: bool = True
     benchmark: bool = True
     save_every_epoch: bool = True
@@ -116,6 +119,18 @@ class SmoothedReduceLROnPlateau:
             "best_smoothed": self.best_smoothed,
             "num_bad_epochs": self.num_bad_epochs,
         }
+
+    def load_state_dict(self, state_dict: dict[str, Any]) -> None:
+        self.factor = float(state_dict.get("factor", self.factor))
+        self.patience = int(state_dict.get("patience", self.patience))
+        self.start_epoch = int(state_dict.get("start_epoch", self.start_epoch))
+        self.window_size = int(state_dict.get("window_size", self.window_size))
+        self.min_lr = float(state_dict.get("min_lr", self.min_lr))
+        self.verbose = bool(state_dict.get("verbose", self.verbose))
+        self.mode = str(state_dict.get("mode", self.mode))
+        self.loss_history = list(state_dict.get("loss_history", self.loss_history))
+        self.best_smoothed = state_dict.get("best_smoothed", self.best_smoothed)
+        self.num_bad_epochs = int(state_dict.get("num_bad_epochs", self.num_bad_epochs))
 
 
 @dataclass
@@ -327,6 +342,13 @@ def fit_reference(
     for phase in phases:
         history[_history_key("loss", phase)] = []
         history[_history_key("acc", phase)] = []
+    if config.gradient_clip_norm is not None:
+        history["grad_norm_preclip_mean_train"] = []
+        history["grad_norm_preclip_max_train"] = []
+        history["grad_norm_postclip_mean_train"] = []
+        history["grad_clip_batches_train"] = []
+        history["grad_clip_frac_train"] = []
+        history["grad_nonfinite_batches_train"] = []
 
     output_path = Path(output_dir) if output_dir is not None else None
     if output_path is not None:
@@ -353,14 +375,17 @@ def fit_reference(
             total_batches = len(dataloaders[phase])
             next_batch_threshold = config.progress_log_every_batches or 0
             next_sample_threshold = config.progress_log_every_samples or 0
+            grad_norm_preclip_sum = 0.0
+            grad_norm_postclip_sum = 0.0
+            grad_norm_preclip_max = 0.0
+            grad_clip_batches = 0
+            grad_nonfinite_batches = 0
 
             for batch_idx, (inputs, labels) in enumerate(dataloaders[phase], start=1):
                 if phase == "train" and config.train_gold_prob > 0.0 and random.random() < config.train_gold_prob:
-                    inputs = inputs.clone()
-                    model.prep_batch(inputs)
+                    inputs = apply_gold_protocol(inputs)
                 if phase == "gold":
-                    inputs = inputs.clone()
-                    model.prep_batch(inputs)
+                    inputs = apply_gold_protocol(inputs)
 
                 inputs = inputs.to(device, non_blocking=True)
                 labels = labels.to(device, non_blocking=True)
@@ -373,6 +398,22 @@ def fit_reference(
 
                     if phase == "train":
                         scaler.scale(loss).backward()
+                        if config.gradient_clip_norm is not None:
+                            scaler.unscale_(optimizer)
+                            total_norm_tensor = torch.nn.utils.clip_grad_norm_(
+                                model.parameters(),
+                                max_norm=config.gradient_clip_norm,
+                                error_if_nonfinite=False,
+                            )
+                            total_norm = float(total_norm_tensor.item())
+                            if math.isfinite(total_norm):
+                                grad_norm_preclip_sum += total_norm
+                                grad_norm_preclip_max = max(grad_norm_preclip_max, total_norm)
+                                grad_norm_postclip_sum += min(total_norm, config.gradient_clip_norm)
+                                if total_norm > config.gradient_clip_norm:
+                                    grad_clip_batches += 1
+                            else:
+                                grad_nonfinite_batches += 1
                         scaler.step(optimizer)
                         scaler.update()
                         optimizer.zero_grad(set_to_none=True)
@@ -418,6 +459,14 @@ def fit_reference(
 
             history[_history_key("loss", phase)].append(float(epoch_loss))
             history[_history_key("acc", phase)].append(float(epoch_acc))
+            if phase == "train" and config.gradient_clip_norm is not None:
+                denom = max(total_batches, 1)
+                history["grad_norm_preclip_mean_train"].append(float(grad_norm_preclip_sum / denom))
+                history["grad_norm_preclip_max_train"].append(float(grad_norm_preclip_max))
+                history["grad_norm_postclip_mean_train"].append(float(grad_norm_postclip_sum / denom))
+                history["grad_clip_batches_train"].append(int(grad_clip_batches))
+                history["grad_clip_frac_train"].append(float(grad_clip_batches / denom))
+                history["grad_nonfinite_batches_train"].append(int(grad_nonfinite_batches))
 
             if phase == "val":
                 scheduler.step(epoch, epoch_loss)
@@ -437,6 +486,14 @@ def fit_reference(
             record[_history_key("acc", phase)] = history[_history_key("acc", phase)][-1]
         record["elapsed_avg_sec"] = (time.time() - since) / (epoch + 1)
         record["lr"] = optimizer.param_groups[0]["lr"]
+        if config.gradient_clip_norm is not None:
+            record["gradient_clip_norm"] = float(config.gradient_clip_norm)
+            record["grad_norm_preclip_mean_train"] = history["grad_norm_preclip_mean_train"][-1]
+            record["grad_norm_preclip_max_train"] = history["grad_norm_preclip_max_train"][-1]
+            record["grad_norm_postclip_mean_train"] = history["grad_norm_postclip_mean_train"][-1]
+            record["grad_clip_batches_train"] = history["grad_clip_batches_train"][-1]
+            record["grad_clip_frac_train"] = history["grad_clip_frac_train"][-1]
+            record["grad_nonfinite_batches_train"] = history["grad_nonfinite_batches_train"][-1]
         if config.log_json:
             print(json.dumps(record))
         else:

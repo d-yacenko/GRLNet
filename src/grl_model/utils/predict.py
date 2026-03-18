@@ -13,6 +13,7 @@ from grl_model.data.adapters import (
     build_pseudotrack_from_image,
     build_pseudotracks_from_images,
     build_track_from_video,
+    canonicalize_track_batch,
 )
 
 
@@ -32,6 +33,7 @@ def predict_track(
     *,
     device: Optional[Union[torch.device, str]] = None,
     apply_gold: bool = False,
+    track_layout: str = "BTCHW",
 ) -> Tensor:
     """Run inference on one track or a batch of tracks. / Выполнить инференс по одному треку или батчу треков.
 
@@ -40,24 +42,20 @@ def predict_track(
     model:
         Track classifier. / Классификатор треков.
     track:
-        Tensor with shape ``[T, C, H, W]`` or ``[B, T, C, H, W]``. /
-        Тензор формы ``[T, C, H, W]`` или ``[B, T, C, H, W]``.
+        Track tensor in the layout declared by ``track_layout``. /
+        Тензор трека в layout, явно заданном через ``track_layout``.
+    track_layout:
+        Explicit input layout. Supported values: ``BTCHW``, ``TCHW``, ``BCTHW``, ``CTHW``. /
+        Явный layout входа. Поддерживаются ``BTCHW``, ``TCHW``, ``BCTHW``, ``CTHW``.
     apply_gold:
         If ``True``, the notebook-compatible gold protocol is applied before forward. /
         Если ``True``, перед `forward` применяется gold-протокол ноутбука.
     """
     model.eval()
     target_device = _infer_device(model, device)
-    if track.ndim == 4:
-        track = track.unsqueeze(0)
-    if track.ndim != 5:
-        raise ValueError(f"Expected [T, C, H, W] or [B, T, C, H, W], got {tuple(track.shape)}")
+    track = canonicalize_track_batch(track, layout=track_layout)
     if apply_gold:
-        if hasattr(model, "prep_batch"):
-            track = track.clone()
-            model.prep_batch(track)
-        else:
-            track = apply_gold_protocol(track)
+        track = apply_gold_protocol(track)
     return model(track.to(target_device))
 
 
@@ -77,7 +75,7 @@ def predict_image(
         track_length=track_length,
         image_transform=image_transform,
     )
-    return predict_track(model, track, device=device, apply_gold=apply_gold)
+    return predict_track(model, track, device=device, apply_gold=apply_gold, track_layout="TCHW")
 
 
 @torch.inference_mode()
@@ -96,7 +94,7 @@ def predict_images(
         track_length=track_length,
         image_transform=image_transform,
     )
-    return predict_track(model, tracks, device=device, apply_gold=apply_gold)
+    return predict_track(model, tracks, device=device, apply_gold=apply_gold, track_layout="BTCHW")
 
 
 @torch.inference_mode()
@@ -124,7 +122,7 @@ def predict_group(
         image_transform=image_transform,
         active_frame_transform=active_frame_transform,
     )
-    return predict_track(model, track, device=device, apply_gold=False)
+    return predict_track(model, track, device=device, apply_gold=False, track_layout="TCHW")
 
 
 @torch.inference_mode()
@@ -153,4 +151,4 @@ def predict_video(
         active_frame_transform=active_frame_transform,
         sampling=sampling,
     )
-    return predict_track(model, track, device=device, apply_gold=False)
+    return predict_track(model, track, device=device, apply_gold=False, track_layout="TCHW")

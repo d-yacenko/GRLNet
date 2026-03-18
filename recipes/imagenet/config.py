@@ -10,8 +10,12 @@ import yaml
 
 @dataclass
 class ModelConfig:
-    name: str = "grl_base"
+    name: str = "grl"
     track_length: int = 10
+    hidden_channels: list[int] = field(default_factory=lambda: [24, 32, 32, 48, 48, 64, 64, 96, 160])
+    pool_after_layers: list[int] = field(default_factory=lambda: [0, 2, 4, 6, 7])
+    global_pool: int = 2
+    forget_bias_init: float = 1.5
 
 
 @dataclass
@@ -33,6 +37,8 @@ class TrainConfig:
     epochs: int = 5
     grad_accum_steps: int = 1
     train_gold_prob: float = 0.5
+    aux_h_loss_weight: float = 0.0
+    gradient_clip_norm: Optional[float] = 20.0
     use_amp: bool = True
     benchmark: bool = True
     eval_on_main_rank_only: bool = True

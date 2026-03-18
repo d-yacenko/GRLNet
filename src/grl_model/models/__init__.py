@@ -1,4 +1,11 @@
-from .grl import ConvLSTMCell, GRLClassifier, grl_base, grl_tiny
+from .grl import ConvLSTMCell, GRLClassifier
+from .grl_debug import DebugConvLSTMCell, GRLDebugClassifier
 from .weights import GRLWeights
 
-__all__ = ["ConvLSTMCell", "GRLClassifier", "GRLWeights", "grl_base", "grl_tiny"]
+__all__ = [
+    "ConvLSTMCell",
+    "DebugConvLSTMCell",
+    "GRLClassifier",
+    "GRLDebugClassifier",
+    "GRLWeights",
+]

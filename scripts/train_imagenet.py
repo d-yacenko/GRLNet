@@ -9,16 +9,15 @@ from pathlib import Path
 import torch
 from torchvision.datasets import ImageFolder
 
-from grl_model.models import grl_base, grl_tiny
+from grl_model.models import GRLClassifier
 from grl_model.utils import ReferenceTrainConfig, fit_reference_imagefolders, set_reference_seed
 
 
-def build_model(name: str, num_classes: int, track_length: int):
-    if name == "grl_tiny":
-        return grl_tiny(num_classes=num_classes, track_length=track_length)
-    if name == "grl_base":
-        return grl_base(num_classes=num_classes, track_length=track_length)
-    raise ValueError(f"Unknown model: {name}")
+def build_model(num_classes: int, track_length: int) -> GRLClassifier:
+    model = GRLClassifier(num_classes=num_classes, track_length=track_length)
+    for cell in model.cells:
+        cell.forget_bias.data.fill_(1.5)
+    return model
 
 
 if __name__ == "__main__":
@@ -27,7 +26,6 @@ if __name__ == "__main__":
     parser.add_argument("--train-subdir", default="train")
     parser.add_argument("--val-subdir", default="val")
     parser.add_argument("--output-dir", type=Path, required=True)
-    parser.add_argument("--model", choices=["grl_tiny", "grl_base"], default="grl_base")
     parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--workers", type=int, default=8)
@@ -44,7 +42,7 @@ if __name__ == "__main__":
     train_root = args.data_root / args.train_subdir
     eval_root = args.data_root / args.val_subdir if args.val_subdir else None
     num_classes = len(ImageFolder(train_root).classes)
-    model = build_model(args.model, num_classes=num_classes, track_length=args.track_length)
+    model = build_model(num_classes=num_classes, track_length=args.track_length)
     config = ReferenceTrainConfig(epochs=args.epochs)
 
     result = fit_reference_imagefolders(

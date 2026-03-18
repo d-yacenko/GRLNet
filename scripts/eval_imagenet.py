@@ -11,16 +11,20 @@ from torch import nn
 from torch.utils.data import DataLoader
 from torchvision import transforms
 
+from grl_model.data import apply_gold_protocol
 from grl_model.data.datasets import ImageFolderPseudoTrackDataset
-from grl_model.models import grl_base, grl_tiny
+from grl_model.models import GRLClassifier
 
 
-def build_model(name: str, num_classes: int, track_length: int):
-    if name == "grl_tiny":
-        return grl_tiny(num_classes=num_classes, track_length=track_length)
-    if name == "grl_base":
-        return grl_base(num_classes=num_classes, track_length=track_length)
-    raise ValueError(f"Unknown model: {name}")
+def build_model(num_classes: int, track_length: int, *, aux_h_supervision: bool = False) -> GRLClassifier:
+    model = GRLClassifier(
+        num_classes=num_classes,
+        track_length=track_length,
+        aux_h_supervision=aux_h_supervision,
+    )
+    for cell in model.cells:
+        cell.forget_bias.data.fill_(1.5)
+    return model
 
 
 def main(args):
@@ -38,9 +42,13 @@ def main(args):
     )
     loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.workers, pin_memory=True)
 
-    model = build_model(args.model, num_classes=len(dataset.classes), track_length=args.track_length)
     checkpoint = torch.load(args.checkpoint, map_location="cpu")
     state = checkpoint["model"] if isinstance(checkpoint, dict) and "model" in checkpoint else checkpoint
+    model = build_model(
+        num_classes=len(dataset.classes),
+        track_length=args.track_length,
+        aux_h_supervision=isinstance(state, dict) and "aux_fc.weight" in state,
+    )
     model.load_state_dict(state)
     model.to(device)
     model.eval()
@@ -54,8 +62,7 @@ def main(args):
     with torch.inference_mode():
         for tracks, targets in loader:
             if args.apply_gold:
-                tracks = tracks.clone()
-                model.prep_batch(tracks)
+                tracks = apply_gold_protocol(tracks)
             tracks = tracks.to(device, non_blocking=True)
             targets = targets.to(device, non_blocking=True)
             with torch.amp.autocast("cuda", enabled=use_amp):
@@ -78,7 +85,6 @@ if __name__ == "__main__":
     parser.add_argument("--data-root", type=Path, required=True)
     parser.add_argument("--val-subdir", default="val")
     parser.add_argument("--checkpoint", type=Path, required=True)
-    parser.add_argument("--model", choices=["grl_tiny", "grl_base"], default="grl_base")
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--image-size", type=int, default=224)

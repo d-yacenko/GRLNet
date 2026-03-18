@@ -11,6 +11,18 @@ consumer-facing helpers for:
   предикта по одиночным изображениям, группам изображений и трекам
 """
 
-from .models import ConvLSTMCell, GRLClassifier, GRLWeights, grl_base, grl_tiny
+from .models import (
+    ConvLSTMCell,
+    DebugConvLSTMCell,
+    GRLClassifier,
+    GRLDebugClassifier,
+    GRLWeights,
+)
 
-__all__ = ["ConvLSTMCell", "GRLClassifier", "GRLWeights", "grl_base", "grl_tiny"]
+__all__ = [
+    "ConvLSTMCell",
+    "DebugConvLSTMCell",
+    "GRLClassifier",
+    "GRLDebugClassifier",
+    "GRLWeights",
+]

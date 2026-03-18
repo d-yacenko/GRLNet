@@ -11,16 +11,15 @@ from typing import Optional
 import torch
 from torchvision.datasets import ImageFolder
 
-from grl_model.models import grl_base, grl_tiny
+from grl_model.models import GRLClassifier
 from grl_model.utils import ReferenceTrainConfig, fit_reference_imagefolders, set_reference_seed
 
 
-def build_model(name: str, num_classes: int, track_length: int):
-    if name == "grl_tiny":
-        return grl_tiny(num_classes=num_classes, track_length=track_length)
-    if name == "grl_base":
-        return grl_base(num_classes=num_classes, track_length=track_length)
-    raise ValueError("Unknown model: %s" % name)
+def build_model(num_classes: int, track_length: int) -> GRLClassifier:
+    model = GRLClassifier(num_classes=num_classes, track_length=track_length)
+    for cell in model.cells:
+        cell.forget_bias.data.fill_(1.5)
+    return model
 
 
 def configure_runtime(device: torch.device, num_threads: Optional[int]) -> None:
@@ -40,7 +39,6 @@ def main() -> None:
     parser.add_argument("--train-subdir", default="train")
     parser.add_argument("--val-subdir", default="val")
     parser.add_argument("--output-root", type=Path, required=True)
-    parser.add_argument("--model", choices=["grl_tiny", "grl_base"], default="grl_base")
     parser.add_argument("--device", default="cuda", help="cpu, cuda, cuda:0, ...")
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--workers", type=int, default=8)
@@ -68,7 +66,7 @@ def main() -> None:
     configure_runtime(device, args.num_threads)
 
     num_classes = len(ImageFolder(train_root).classes)
-    model = build_model(args.model, num_classes=num_classes, track_length=args.track_length)
+    model = build_model(num_classes=num_classes, track_length=args.track_length)
 
     output_dir = args.output_root / device.type
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -77,14 +75,14 @@ def main() -> None:
         epochs=1,
         save_every_epoch=True,
         log_json=True,
-        checkpoint_prefix="%s_%s_1epoch" % (args.model, device.type),
+        checkpoint_prefix="grl_%s_1epoch" % device.type,
         progress_log_every_batches=args.progress_every_batches,
         progress_log_every_samples=args.progress_every_samples,
     )
 
     run_meta = {
         "device": str(device),
-        "model": args.model,
+        "model": "grl",
         "batch_size": args.batch_size,
         "workers": args.workers,
         "track_length": args.track_length,

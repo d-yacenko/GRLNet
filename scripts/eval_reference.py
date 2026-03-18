@@ -4,7 +4,7 @@ from __future__ import annotations
 
 The script mirrors reference semantics with explicit roots:
 - ``val`` is evaluated on ``eval_root`` without gold preprocessing
-- ``gold`` is evaluated on ``eval_root`` with notebook-compatible ``prep_batch()``
+- ``gold`` is evaluated on ``eval_root`` with explicit gold protocol
 """
 
 import argparse
@@ -24,18 +24,22 @@ if __package__ in (None, ""):
         if str(candidate) not in sys.path:
             sys.path.insert(0, str(candidate))
 
+from grl_model.data import apply_gold_protocol
 from grl_model.data.datasets import SequenceFolderDataset
-from grl_model.models import grl_base, grl_tiny
+from grl_model.models import GRLClassifier
 from grl_model.utils import set_reference_seed
 from grl_model.utils.training import _build_default_transforms
 
 
-def build_model(name: str, num_classes: int, track_length: int):
-    if name == "grl_tiny":
-        return grl_tiny(num_classes=num_classes, track_length=track_length)
-    if name == "grl_base":
-        return grl_base(num_classes=num_classes, track_length=track_length)
-    raise ValueError(f"Unknown model: {name}")
+def build_model(num_classes: int, track_length: int, *, aux_h_supervision: bool = False) -> GRLClassifier:
+    model = GRLClassifier(
+        num_classes=num_classes,
+        track_length=track_length,
+        aux_h_supervision=aux_h_supervision,
+    )
+    for cell in model.cells:
+        cell.forget_bias.data.fill_(1.5)
+    return model
 
 
 def load_checkpoint_state(path: Path) -> Dict[str, torch.Tensor]:
@@ -58,7 +62,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--train-root", type=Path, required=True)
     parser.add_argument("--eval-root", type=Path, required=True)
     parser.add_argument("--checkpoint", type=Path, required=True)
-    parser.add_argument("--model", choices=["grl_tiny", "grl_base"], default="grl_base")
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--image-size", type=int, default=224)
@@ -114,8 +117,7 @@ def evaluate_phase(
     with torch.inference_mode():
         for inputs, labels in loader:
             if phase == "gold":
-                inputs = inputs.clone()
-                model.prep_batch(inputs)
+                inputs = apply_gold_protocol(inputs)
 
             inputs = inputs.to(device, non_blocking=True)
             labels = labels.to(device, non_blocking=True)
@@ -154,8 +156,13 @@ def main() -> None:
     if train_classes != eval_classes:
         raise ValueError("train_root and eval_root must expose the same class order")
 
-    model = build_model(args.model, num_classes=len(eval_classes), track_length=args.track_length)
-    model.load_state_dict(load_checkpoint_state(args.checkpoint))
+    state = load_checkpoint_state(args.checkpoint)
+    model = build_model(
+        num_classes=len(eval_classes),
+        track_length=args.track_length,
+        aux_h_supervision=("aux_fc.weight" in state),
+    )
+    model.load_state_dict(state)
     model.to(device)
 
     loaders = build_eval_loaders(
@@ -175,7 +182,7 @@ def main() -> None:
         "train_root": str(args.train_root),
         "eval_root": str(args.eval_root),
         "checkpoint": str(args.checkpoint),
-        "model": args.model,
+        "model": "grl",
         "track_length": args.track_length,
         "image_size": args.image_size,
         "center_crop": bool(args.center_crop),

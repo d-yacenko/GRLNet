@@ -15,7 +15,7 @@ if __package__ in (None, ""):
         if str(candidate) not in sys.path:
             sys.path.insert(0, str(candidate))
 
-from grl_model.models import grl_base, grl_tiny
+from grl_model.models import GRLClassifier
 
 from recipes.imagenet.checkpointing import load_checkpoint, resolve_resume_path, save_summary
 from recipes.imagenet.config import RecipeConfig, load_recipe_config, save_recipe_config
@@ -23,13 +23,20 @@ from recipes.imagenet.data_pipeline import build_imagenet_dataloaders
 from recipes.imagenet.dist import barrier, destroy_distributed, init_distributed, wrap_model
 from recipes.imagenet.engine import build_recipe_optimizer, build_recipe_scheduler, run_training
 
-
-def build_model(name: str, num_classes: int, track_length: int):
-    if name == "grl_tiny":
-        return grl_tiny(num_classes=num_classes, track_length=track_length)
-    if name == "grl_base":
-        return grl_base(num_classes=num_classes, track_length=track_length)
-    raise ValueError(f"Unknown model: {name}")
+def build_model(config: RecipeConfig, num_classes: int) -> GRLClassifier:
+    if config.model.name != "grl":
+        raise ValueError(f"Unknown model: {config.model.name}")
+    model = GRLClassifier(
+        num_classes=num_classes,
+        track_length=config.model.track_length,
+        hidden_channels=tuple(config.model.hidden_channels),
+        pool_after_layers=tuple(config.model.pool_after_layers),
+        global_pool=config.model.global_pool,
+        aux_h_supervision=config.train.aux_h_loss_weight > 0.0,
+    )
+    for cell in model.cells:
+        cell.forget_bias.data.fill_(float(config.model.forget_bias_init))
+    return model
 
 
 def parse_args() -> argparse.Namespace:
@@ -126,11 +133,7 @@ def main() -> None:
         barrier(ctx)
 
         data_bundle = build_imagenet_dataloaders(config, ctx)
-        model = build_model(
-            config.model.name,
-            num_classes=len(data_bundle.class_names),
-            track_length=config.model.track_length,
-        ).to(ctx.device)
+        model = build_model(config, num_classes=len(data_bundle.class_names)).to(ctx.device)
         model = wrap_model(model, ctx, broadcast_buffers=False, find_unused_parameters=False)
 
         optimizer = build_recipe_optimizer(model, config)

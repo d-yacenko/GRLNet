@@ -68,6 +68,7 @@ class SequenceFolderDataset(Dataset):
             else:
                 imgs.append(pil_to_tensor(image).float().div(255.0))
         active = torch.stack(imgs, dim=0)
+        # Исторический notebook-режим: после активной трети всегда идёт нулевой хвост длиной 2 * seq_len.
         zeros = torch.zeros((len(imgs) * 2,) + tuple(active.shape[1:]), dtype=active.dtype)
         return torch.cat((active, zeros), dim=0), self.labels[idx]
 

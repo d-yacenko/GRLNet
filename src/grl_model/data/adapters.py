@@ -36,6 +36,37 @@ def _normalize_image_group(images: Union[ImageLike, Sequence[ImageLike], Tensor]
     return list(images)
 
 
+def canonicalize_track_batch(track: Tensor, *, layout: str = "BTCHW") -> Tensor:
+    """Convert an explicitly declared track layout to the canonical ``[B, T, C, H, W]`` form.
+
+    Supported layouts:
+    Поддерживаемые layout:
+
+    - ``BTCHW``: canonical batched track / канонический батч треков
+    - ``TCHW``: single track without batch dim / один трек без batch-оси
+    - ``BCTHW``: batched alternative with channels before time / батч с каналами перед временем
+    - ``CTHW``: single alternative with channels before time / одиночный вариант с каналами перед временем
+    """
+    key = layout.strip().upper()
+    if key == "BTCHW":
+        if track.ndim != 5:
+            raise ValueError(f"Expected [B, T, C, H, W] for layout {layout!r}, got {tuple(track.shape)}")
+        return track
+    if key == "TCHW":
+        if track.ndim != 4:
+            raise ValueError(f"Expected [T, C, H, W] for layout {layout!r}, got {tuple(track.shape)}")
+        return track.unsqueeze(0)
+    if key == "BCTHW":
+        if track.ndim != 5:
+            raise ValueError(f"Expected [B, C, T, H, W] for layout {layout!r}, got {tuple(track.shape)}")
+        return track.permute(0, 2, 1, 3, 4).contiguous()
+    if key == "CTHW":
+        if track.ndim != 4:
+            raise ValueError(f"Expected [C, T, H, W] for layout {layout!r}, got {tuple(track.shape)}")
+        return track.permute(1, 0, 2, 3).contiguous().unsqueeze(0)
+    raise ValueError(f"Unsupported track layout: {layout!r}")
+
+
 def _select_group_items(items: list[ImageLike], *, target_length: int, sampling: str) -> list[ImageLike]:
     if not items:
         raise ValueError("images must not be empty")

@@ -49,6 +49,14 @@ There is a single-GPU A100 training launcher for a longer production run:
 - default dataset roots are `/home/faenna/grl/image-net1000/layout/train` and `/home/faenna/grl/image-net1000/layout/val`
 - it saves checkpoints and `progress.jsonl` to `/home/faenna/grl/runs/grlnet_a100_single_20e`
 
+There is also a longer single-GPU A100 launcher for the current canonical GRL run:
+- `recipes/imagenet/launch/slurm_a100_single_50e.sh`
+- it uses `recipes/imagenet/configs/grl_a100_single_50e.yaml`
+- it uses the canonical economic GRL channel schedule
+- it enables AMP, gradient clipping, auxiliary supervision on the `h`-branch and a shorter scheduler tuned for 50 epochs
+- conservative starting point for `A100 80GB`: `per_gpu_batch_size: 28`
+- practical expected range on `A100 80GB`: roughly `28-32`, but confirm with a 1-epoch benchmark first
+
 ## Example
 
 ```bash

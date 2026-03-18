@@ -1,6 +1,10 @@
 model:
-  name: grl_base
+  name: grl
   track_length: 10
+  hidden_channels: [24, 32, 32, 48, 48, 64, 64, 96, 160]
+  pool_after_layers: [0, 2, 4, 6, 7]
+  global_pool: 2
+  forget_bias_init: 1.5
 
 data:
   train_root: /home/faenna/grl/image-net1000/layout/train
@@ -18,6 +22,7 @@ train:
   epochs: 20
   grad_accum_steps: 2
   train_gold_prob: 0.5
+  gradient_clip_norm: 20.0
   use_amp: true
   benchmark: true
   eval_on_main_rank_only: false
@@ -29,10 +34,10 @@ optimizer:
 
 scheduler:
   factor: 0.7
-  patience: 9
-  start_epoch: 15
-  window_size: 70
-  min_lr: 0.0001
+  patience: 4
+  start_epoch: 6
+  window_size: 5
+  min_lr: 0.00005
   mode: min
 
 logging:
