@@ -15,6 +15,7 @@ Principles:
 - explicit config-driven training via `train.py`
 - single-GPU and `torchrun`-based DDP bootstrap
 - JSONL progress logging for long cluster jobs
+- phase summaries with both `acc` and `acc_top5`
 - GPU memory logging for batch-size tuning
 - `latest` and `best` checkpoints
 - resume from checkpoint path or `resume_from: auto`
@@ -56,6 +57,21 @@ There is also a longer single-GPU A100 launcher for the current canonical GRL ru
 - it enables AMP, gradient clipping, auxiliary supervision on the `h`-branch and a shorter scheduler tuned for 50 epochs
 - conservative starting point for `A100 80GB`: `per_gpu_batch_size: 28`
 - practical expected range on `A100 80GB`: roughly `28-32`, but confirm with a 1-epoch benchmark first
+
+There is also a wider balanced A100 launcher for the same 50-epoch recipe:
+- `recipes/imagenet/launch/slurm_a100_single_50e_balanced_auxh.sh`
+- it uses `recipes/imagenet/configs/grl_a100_single_50e_balanced_auxh.yaml`
+- it switches to the balanced channel schedule `(..., 96, 192)`
+- it keeps auxiliary supervision on the `h`-branch
+- it relaxes gradient clipping from `20.0` to `40.0`
+- conservative starting point for `A100 80GB`: `per_gpu_batch_size: 24`
+
+There is also a no-clip balanced A100 launcher for control experiments:
+- `recipes/imagenet/launch/slurm_a100_single_50e_balanced_auxh_noclip.sh`
+- it uses `recipes/imagenet/configs/grl_a100_single_50e_balanced_auxh_noclip.yaml`
+- it keeps the balanced channel schedule and auxiliary supervision
+- it disables gradient clipping completely
+- it uses the current A100 batch size `per_gpu_batch_size: 28`
 
 ## Example
 

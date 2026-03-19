@@ -71,6 +71,7 @@ def build_checkpoint_state(
     history: dict[str, list[float]],
     best_val_loss: float,
     best_val_acc: float,
+    best_val_acc_top5: float,
     config: RecipeConfig,
     ctx: DistributedContext,
     output_dir: Path,
@@ -87,6 +88,7 @@ def build_checkpoint_state(
         "history": history,
         "best_val_loss": best_val_loss,
         "best_val_acc": best_val_acc,
+        "best_val_acc_top5": best_val_acc_top5,
         "config": config.to_dict(),
         "dist": {
             "enabled": ctx.enabled,

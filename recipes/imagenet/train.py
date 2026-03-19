@@ -145,6 +145,7 @@ def main() -> None:
         history = None
         best_val_loss = float("inf")
         best_val_acc = 0.0
+        best_val_acc_top5 = 0.0
 
         resume_path = resolve_resume_path(
             output_dir=output_dir,
@@ -164,6 +165,7 @@ def main() -> None:
             history = checkpoint.get("history")
             best_val_loss = float(checkpoint.get("best_val_loss", best_val_loss))
             best_val_acc = float(checkpoint.get("best_val_acc", best_val_acc))
+            best_val_acc_top5 = float(checkpoint.get("best_val_acc_top5", best_val_acc_top5))
 
         result = run_training(
             model=model,
@@ -180,9 +182,11 @@ def main() -> None:
             history=history,
             best_val_loss=best_val_loss,
             best_val_acc=best_val_acc,
+            best_val_acc_top5=best_val_acc_top5,
         )
 
         if ctx.is_main_process:
+            history = result["history"]
             summary = {
                 "script": "recipes/imagenet/train.py",
                 "output_dir": str(output_dir),
@@ -190,10 +194,23 @@ def main() -> None:
                 "device": str(ctx.device),
                 "best_val_loss": result["best_val_loss"],
                 "best_val_acc": result["best_val_acc"],
+                "best_val_acc_top5": result["best_val_acc_top5"],
                 "elapsed_sec": result["elapsed_sec"],
                 "global_step": result["global_step"],
                 "checkpoint_prefix": config.checkpointing.checkpoint_prefix,
             }
+            if history.get("acc_train"):
+                summary["final_acc_train"] = history["acc_train"][-1]
+            if history.get("acc_top5_train"):
+                summary["final_acc_top5_train"] = history["acc_top5_train"][-1]
+            if history.get("acc_val"):
+                summary["final_acc_val"] = history["acc_val"][-1]
+            if history.get("acc_top5_val"):
+                summary["final_acc_top5_val"] = history["acc_top5_val"][-1]
+            if history.get("acc_gold"):
+                summary["final_acc_gold"] = history["acc_gold"][-1]
+            if history.get("acc_top5_gold"):
+                summary["final_acc_top5_gold"] = history["acc_top5_gold"][-1]
             save_summary(summary, output_dir / "train_summary.json")
             print(json.dumps(summary))
         barrier(ctx)

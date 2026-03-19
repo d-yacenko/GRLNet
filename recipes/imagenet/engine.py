@@ -18,6 +18,11 @@ from .config import RecipeConfig
 from .dist import DistributedContext, barrier, broadcast_float, gpu_memory_stats, reduce_sum, unwrap_model
 
 
+def _topk_hits(logits: torch.Tensor, labels: torch.Tensor, k: int) -> int:
+    topk = logits.topk(min(k, logits.shape[1]), dim=1).indices
+    return int(topk.eq(labels.view(-1, 1)).any(dim=1).sum().item())
+
+
 def build_recipe_optimizer(model: nn.Module, config: RecipeConfig) -> torch.optim.Optimizer:
     return build_reference_optimizer(
         unwrap_model(model),
@@ -77,6 +82,7 @@ def _phase_summary_record(epoch: int, phase: str, metrics: dict[str, float], lr:
         "phase": phase,
         "loss": metrics["loss"],
         "acc": metrics["acc"],
+        "acc_top5": metrics["acc_top5"],
         "num_samples": metrics["num_samples"],
         "lr": lr,
     }
@@ -115,6 +121,7 @@ def train_one_epoch(
     running_loss_main = 0.0
     running_loss_aux = 0.0
     running_corrects = 0.0
+    running_top5_hits = 0.0
     running_samples = 0
     phase_started = time.time()
     last_step_ended = phase_started
@@ -180,6 +187,7 @@ def train_one_epoch(
         if raw_loss_aux is not None:
             running_loss_aux += raw_loss_aux.detach().item() * batch_size
         running_corrects += (preds == labels).sum().item()
+        running_top5_hits += _topk_hits(logits, labels, 5)
         running_samples += batch_size
         global_step += 1
 
@@ -218,11 +226,13 @@ def train_one_epoch(
 
     loss_sum = reduce_sum(running_loss, ctx)
     correct_sum = reduce_sum(running_corrects, ctx)
+    top5_sum = reduce_sum(running_top5_hits, ctx)
     sample_sum = reduce_sum(float(running_samples), ctx)
     metrics = {
         "loss": loss_sum / max(sample_sum, 1.0),
         "loss_main": running_loss_main / max(running_samples, 1),
         "acc": correct_sum / max(sample_sum, 1.0),
+        "acc_top5": top5_sum / max(sample_sum, 1.0),
         "num_samples": sample_sum,
         "elapsed_sec": time.time() - phase_started,
     }
@@ -258,6 +268,7 @@ def evaluate_phase(
     loss_main_sum = 0.0
     loss_aux_sum = 0.0
     correct_sum = 0.0
+    top5_sum = 0.0
     sample_sum = 0
     started = time.time()
     with torch.inference_mode():
@@ -284,11 +295,13 @@ def evaluate_phase(
             if loss_aux is not None:
                 loss_aux_sum += loss_aux.item() * batch_size
             correct_sum += (logits.argmax(dim=1) == labels).sum().item()
+            top5_sum += _topk_hits(logits, labels, 5)
             sample_sum += batch_size
     metrics = {
         "loss": loss_sum / max(sample_sum, 1),
         "loss_main": loss_main_sum / max(sample_sum, 1),
         "acc": correct_sum / max(sample_sum, 1),
+        "acc_top5": top5_sum / max(sample_sum, 1),
         "num_samples": sample_sum,
         "elapsed_sec": time.time() - started,
     }
@@ -313,6 +326,7 @@ def run_training(
     history: Optional[dict[str, list[float]]] = None,
     best_val_loss: float = float("inf"),
     best_val_acc: float = 0.0,
+    best_val_acc_top5: float = 0.0,
 ) -> dict[str, Any]:
     criterion = nn.CrossEntropyLoss()
     progress_path = output_dir / config.logging.jsonl_filename
@@ -322,12 +336,15 @@ def run_training(
             "loss_train": [],
             "loss_main_train": [],
             "acc_train": [],
+            "acc_top5_train": [],
             "loss_val": [],
             "loss_main_val": [],
             "acc_val": [],
+            "acc_top5_val": [],
             "loss_gold": [],
             "loss_main_gold": [],
             "acc_gold": [],
+            "acc_top5_gold": [],
         }
         if config.train.aux_h_loss_weight > 0.0:
             history["loss_aux_train"] = []
@@ -343,6 +360,9 @@ def run_training(
         history.setdefault("loss_main_train", [])
         history.setdefault("loss_main_val", [])
         history.setdefault("loss_main_gold", [])
+        history.setdefault("acc_top5_train", [])
+        history.setdefault("acc_top5_val", [])
+        history.setdefault("acc_top5_gold", [])
         if config.train.aux_h_loss_weight > 0.0:
             history.setdefault("loss_aux_train", [])
             history.setdefault("loss_aux_val", [])
@@ -374,6 +394,7 @@ def run_training(
         history["loss_train"].append(float(train_metrics["loss"]))
         history["loss_main_train"].append(float(train_metrics["loss_main"]))
         history["acc_train"].append(float(train_metrics["acc"]))
+        history["acc_top5_train"].append(float(train_metrics["acc_top5"]))
         if config.train.aux_h_loss_weight > 0.0:
             history["loss_aux_train"].append(float(train_metrics["loss_aux"]))
         if config.train.gradient_clip_norm is not None:
@@ -440,9 +461,11 @@ def run_training(
             history["loss_val"].append(float(val_metrics["loss"]))
             history["loss_main_val"].append(float(val_metrics["loss_main"]))
             history["acc_val"].append(float(val_metrics["acc"]))
+            history["acc_top5_val"].append(float(val_metrics["acc_top5"]))
             history["loss_gold"].append(float(gold_metrics["loss"]))
             history["loss_main_gold"].append(float(gold_metrics["loss_main"]))
             history["acc_gold"].append(float(gold_metrics["acc"]))
+            history["acc_top5_gold"].append(float(gold_metrics["acc_top5"]))
             if config.train.aux_h_loss_weight > 0.0:
                 history["loss_aux_val"].append(float(val_metrics["loss_aux"]))
                 history["loss_aux_gold"].append(float(gold_metrics["loss_aux"]))
@@ -455,6 +478,7 @@ def run_training(
             if is_best:
                 best_val_loss = float(val_metrics["loss_main"])
                 best_val_acc = float(val_metrics["acc"])
+                best_val_acc_top5 = float(val_metrics["acc_top5"])
 
             checkpoint_state = build_checkpoint_state(
                 model=model,
@@ -466,6 +490,7 @@ def run_training(
                 history=history,
                 best_val_loss=best_val_loss,
                 best_val_acc=best_val_acc,
+                best_val_acc_top5=best_val_acc_top5,
                 config=config,
                 ctx=ctx,
                 output_dir=output_dir,
@@ -493,6 +518,7 @@ def run_training(
                 "lr": optimizer.param_groups[0]["lr"],
                 "best_val_loss": best_val_loss,
                 "best_val_acc": best_val_acc,
+                "best_val_acc_top5": best_val_acc_top5,
                 "elapsed_avg_sec": (time.time() - started) / max(epoch + 1 - start_epoch, 1),
                 "rank": ctx.rank,
                 "world_size": ctx.world_size,
@@ -507,6 +533,7 @@ def run_training(
         "history": history,
         "best_val_loss": best_val_loss,
         "best_val_acc": best_val_acc,
+        "best_val_acc_top5": best_val_acc_top5,
         "global_step": global_step,
         "elapsed_sec": time.time() - started,
     }
