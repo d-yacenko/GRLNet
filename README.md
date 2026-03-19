@@ -45,8 +45,8 @@ This follows the intended motivation of the architecture: iterative feature refi
   RU: нативный контракт модели: `Tensor[B, T, C, H, W] -> Tensor[B, K]`
 - EN: notebook-compatible ConvLSTM implementation with learned `forget_bias`
   RU: совместимая с ноутбуком реализация ConvLSTM с обучаемым `forget_bias`
-- EN: notebook-compatible `gold` protocol through `prep_batch()`
-  RU: совместимый с ноутбуком `gold`-протокол через `prep_batch()`
+- EN: `gold` protocol moved to the data layer through explicit adapters
+  RU: `gold`-протокол вынесен в data-layer и вызывается через явные adapters
 - EN: support for single-image inference through pseudo-track adapters
   RU: поддержка инференса по одной картинке через pseudo-track adapters
 - EN: support for grouped-image and video-to-track inference
@@ -83,23 +83,40 @@ tests/
 pip install -e .
 ```
 
+or directly from git / или сразу из git:
+
+```bash
+pip install "grl-track-classifier @ git+https://github.com/<ORG>/<REPO>.git#subdirectory=GRLNet"
+```
+
 ## Quickstart / Быстрый старт
 
 ### Create a model / Создать модель
 
 ```python
-from grl_model.models import grl_base
+from grl_model.models import GRLClassifier
 
-model = grl_base(num_classes=1000, track_length=10)
+model = GRLClassifier(num_classes=1000, track_length=10)
+```
+
+### Load official published weights / Загрузить опубликованные веса
+
+```python
+from grl_model.models import GRLClassifier, GRLWeights
+
+model = GRLClassifier.from_weights(
+    GRLWeights.IMAGENET1K_AUXH_A100_E50_V1,
+    map_location="cpu",
+)
 ```
 
 ### Train with the reference recipe / Обучить по reference-рецепту
 
 ```python
-from grl_model.models import grl_base
+from grl_model.models import GRLClassifier
 from grl_model.utils import ReferenceTrainConfig, fit_reference_imagefolders, plot_history
 
-model = grl_base(num_classes=1000, track_length=10)
+model = GRLClassifier(num_classes=1000, track_length=10, aux_h_supervision=True)
 config = ReferenceTrainConfig(epochs=100)
 
 result = fit_reference_imagefolders(
@@ -125,10 +142,10 @@ print(result.best_val_acc, result.best_val_loss, result.best_epoch)
 from PIL import Image
 from torchvision import transforms
 
-from grl_model.models import grl_base
+from grl_model.models import GRLClassifier
 from grl_model.utils.predict import predict_image
 
-model = grl_base(num_classes=1000, track_length=10).eval()
+model = GRLClassifier(num_classes=1000, track_length=10).eval()
 image = Image.open("sample.jpg").convert("RGB")
 
 transform = transforms.Compose([

@@ -5,6 +5,8 @@ from typing import Iterable
 import torch
 from torch import Tensor, nn
 
+from .weights import GRLWeights
+
 
 def _pool2_size(size: int) -> int:
     return (size - 2) // 2 + 1
@@ -127,6 +129,29 @@ class GRLClassifier(nn.Module):
         self.fusion_input_dim = self.head_dim * 2
         self.fc = nn.Linear(self.fusion_input_dim, num_classes)
         self.aux_fc = nn.Linear(self.head_dim, num_classes) if self.aux_h_supervision else None
+
+    @classmethod
+    def from_weights(
+        cls,
+        weights: GRLWeights | str,
+        *,
+        map_location: str | torch.device = "cpu",
+        progress: bool = True,
+        check_hash: bool = False,
+        **override_kwargs,
+    ) -> "GRLClassifier":
+        resolved = GRLWeights.get(weights) if isinstance(weights, str) else weights
+        model_kwargs = dict(resolved.model_kwargs)
+        model_kwargs.update(override_kwargs)
+        model = cls(**model_kwargs)
+        state_dict = resolved.get_state_dict(
+            map_location=map_location,
+            progress=progress,
+            check_hash=check_hash,
+        )
+        model.load_state_dict(state_dict, strict=True)
+        model.eval()
+        return model
 
     @staticmethod
     def _require_track_batch(x: Tensor) -> Tensor:

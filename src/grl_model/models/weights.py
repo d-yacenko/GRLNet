@@ -80,7 +80,7 @@ class GRLWeights:
 # Fill the final release URL before publishing the first official weights.
 GRLWeights.IMAGENET1K_AUXH_A100_E50_V1 = GRLWeights(
     name="IMAGENET1K_AUXH_A100_E50_V1",
-    url="https://github.com/d-yacenko/Article11/releases/download/v0.1.0-rc1/grl_imagenet1k_auxh_a100_e50_v1.pth",
+    url="https://github.com/d-yacenko/GRLNet/releases/download/v0.1.0-rc1/grl_imagenet1k_auxh_a100_e50_v1.pth",
     meta={
         "dataset": "ImageNet-1K",
         "recipe": "recipes/imagenet/configs/grl_a100_single_50e.yaml",
