@@ -1,7 +1,7 @@
 model:
   name: grl
   track_length: 10
-  hidden_channels: [24, 32, 32, 48, 48, 64, 64, 96, 192]
+  hidden_channels: [24, 32, 32, 48, 48, 64, 64, 128, 224]
   pool_after_layers: [0, 2, 4, 6, 7]
   global_pool: 2
   forget_bias_init: 1.5
@@ -50,8 +50,8 @@ logging:
   log_json: true
 
 checkpointing:
-  output_dir: /home/faenna/grl/runs/grlnet_a100_single_50e_balanced_auxh
-  checkpoint_prefix: grl_a100_single_50e_balanced_auxh
+  output_dir: /home/faenna/grl/runs/grlnet_a100_single_50e_wide224_auxh
+  checkpoint_prefix: grl_a100_single_50e_wide224_auxh
   save_every_epoch: true
   save_best: true
   resume_from: auto

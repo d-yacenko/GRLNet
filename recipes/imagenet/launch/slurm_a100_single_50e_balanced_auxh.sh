@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=grlnet_a100_50e_bal
+#SBATCH --job-name=grlnet_a100_50e_w224
 #SBATCH -p gpu_A100
 #SBATCH --gres=gpu:1
 #SBATCH --ntasks-per-node=1
@@ -15,7 +15,7 @@ REPO_DIR="${REPO_DIR:-/home/faenna/grl/GRLNet}"
 VENV_ACTIVATE="${VENV_ACTIVATE:-/home/faenna/grl/torch/bin/activate}"
 TRAIN_ROOT="${TRAIN_ROOT:-/home/faenna/grl/image-net1000/layout/train}"
 EVAL_ROOT="${EVAL_ROOT:-/home/faenna/grl/image-net1000/layout/val}"
-OUTPUT_DIR="${OUTPUT_DIR:-/home/faenna/grl/runs/grlnet_a100_single_50e_balanced_auxh}"
+OUTPUT_DIR="${OUTPUT_DIR:-/home/faenna/grl/runs/grlnet_a100_single_50e_wide224_auxh}"
 CONFIG_PATH="${CONFIG_PATH:-$REPO_DIR/recipes/imagenet/configs/grl_a100_single_50e_balanced_auxh.yaml}"
 
 cd "$REPO_DIR"
