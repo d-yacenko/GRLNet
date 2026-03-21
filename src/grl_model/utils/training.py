@@ -196,6 +196,12 @@ def _history_key(metric: str, phase: str) -> str:
     return f"{metric}_{phase}"
 
 
+def _topk_correct(outputs: Tensor, labels: Tensor, k: int = 5) -> int:
+    k = min(k, outputs.shape[1])
+    topk = outputs.topk(k, dim=1).indices
+    return int(topk.eq(labels.unsqueeze(1)).any(dim=1).sum().item())
+
+
 def _should_log_progress(
     *,
     batch_idx: int,
@@ -290,6 +296,16 @@ def plot_history(history: dict[str, list[float]]) -> None:
     plt.title("Accuracy")
     plt.show()
 
+    if any(_history_key("acc_top5", phase) in history for phase in ("train", "val", "gold")):
+        plt.figure()
+        for phase in ("train", "val", "gold"):
+            key = _history_key("acc_top5", phase)
+            if key in history:
+                plt.plot(epochs, history[key], label=key)
+        plt.legend(framealpha=1, frameon=True)
+        plt.title("Top-5 Accuracy")
+        plt.show()
+
 
 
 def fit_reference(
@@ -342,6 +358,7 @@ def fit_reference(
     for phase in phases:
         history[_history_key("loss", phase)] = []
         history[_history_key("acc", phase)] = []
+        history[_history_key("acc_top5", phase)] = []
     if config.gradient_clip_norm is not None:
         history["grad_norm_preclip_mean_train"] = []
         history["grad_norm_preclip_max_train"] = []
@@ -369,6 +386,7 @@ def fit_reference(
 
             running_loss = 0.0
             running_corrects = 0
+            running_top5_corrects = 0
             processed_samples = 0
             phase_started = time.time()
             total_samples = dataset_sizes[phase]
@@ -395,6 +413,7 @@ def fit_reference(
                         outputs = model(inputs)
                         loss = criterion(outputs, labels)
                     _, preds = torch.max(outputs, 1)
+                    top5_correct = _topk_correct(outputs, labels, k=5)
 
                     if phase == "train":
                         scaler.scale(loss).backward()
@@ -420,6 +439,7 @@ def fit_reference(
 
                 running_loss += loss.item() * inputs.size(0)
                 running_corrects += torch.sum(preds == labels.data).item()
+                running_top5_corrects += top5_correct
                 processed_samples += inputs.size(0)
 
                 if _should_log_progress(
@@ -456,9 +476,11 @@ def fit_reference(
 
             epoch_loss = running_loss / dataset_sizes[phase]
             epoch_acc = running_corrects / dataset_sizes[phase]
+            epoch_acc_top5 = running_top5_corrects / dataset_sizes[phase]
 
             history[_history_key("loss", phase)].append(float(epoch_loss))
             history[_history_key("acc", phase)].append(float(epoch_acc))
+            history[_history_key("acc_top5", phase)].append(float(epoch_acc_top5))
             if phase == "train" and config.gradient_clip_norm is not None:
                 denom = max(total_batches, 1)
                 history["grad_norm_preclip_mean_train"].append(float(grad_norm_preclip_sum / denom))
@@ -484,6 +506,7 @@ def fit_reference(
         for phase in phases:
             record[_history_key("loss", phase)] = history[_history_key("loss", phase)][-1]
             record[_history_key("acc", phase)] = history[_history_key("acc", phase)][-1]
+            record[_history_key("acc_top5", phase)] = history[_history_key("acc_top5", phase)][-1]
         record["elapsed_avg_sec"] = (time.time() - since) / (epoch + 1)
         record["lr"] = optimizer.param_groups[0]["lr"]
         if config.gradient_clip_norm is not None:
