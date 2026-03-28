@@ -15,6 +15,7 @@ REPO_DIR="${REPO_DIR:-/home/faenna/grl/GRLNet}"
 VENV_ACTIVATE="${VENV_ACTIVATE:-/home/faenna/grl/torch/bin/activate}"
 TRAIN_ROOT="${TRAIN_ROOT:-/home/faenna/grl/image-net1000/layout/train}"
 EVAL_ROOT="${EVAL_ROOT:-/home/faenna/grl/image-net1000/layout/val}"
+GOLD_ROOT="${GOLD_ROOT:-}"
 OUTPUT_DIR="${OUTPUT_DIR:-/home/faenna/grl/runs/stabhrec40_a100_single_50e}"
 CONFIG_PATH="${CONFIG_PATH:-$REPO_DIR/recipes/imagenet/configs/stabhrec40_a100_single_50e.yaml}"
 
@@ -28,8 +29,16 @@ export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:T
 nvidia-smi || true
 nvidia-smi -L || true
 
-python -u recipes/imagenet/train_stabhrec40.py \
-  --config "$CONFIG_PATH" \
-  --train-root "$TRAIN_ROOT" \
-  --eval-root "$EVAL_ROOT" \
+CMD=(
+  python -u recipes/imagenet/train_stabhrec40.py
+  --config "$CONFIG_PATH"
+  --train-root "$TRAIN_ROOT"
+  --eval-root "$EVAL_ROOT"
   --output-dir "$OUTPUT_DIR"
+)
+
+if [[ -n "$GOLD_ROOT" ]]; then
+  CMD+=(--gold-root "$GOLD_ROOT")
+fi
+
+"${CMD[@]}"

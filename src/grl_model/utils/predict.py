@@ -55,7 +55,8 @@ def predict_track(
     target_device = _infer_device(model, device)
     track = canonicalize_track_batch(track, layout=track_layout)
     if apply_gold:
-        track = apply_gold_protocol(track)
+        active_length = int(getattr(model, "seq_len_train", 0) or 0) or None
+        track = apply_gold_protocol(track, active_length=active_length)
     return model(track.to(target_device))
 
 
@@ -65,6 +66,7 @@ def predict_image(
     image: Union[Image.Image, Tensor],
     *,
     track_length: int,
+    full_track_length: Optional[int] = None,
     image_transform=None,
     device: Optional[Union[torch.device, str]] = None,
     apply_gold: bool = True,
@@ -73,6 +75,7 @@ def predict_image(
     track = build_pseudotrack_from_image(
         image,
         track_length=track_length,
+        full_track_length=full_track_length,
         image_transform=image_transform,
     )
     return predict_track(model, track, device=device, apply_gold=apply_gold, track_layout="TCHW")
@@ -84,6 +87,7 @@ def predict_images(
     images: Union[Sequence[Union[Image.Image, Tensor]], Tensor],
     *,
     track_length: int,
+    full_track_length: Optional[int] = None,
     image_transform=None,
     device: Optional[Union[torch.device, str]] = None,
     apply_gold: bool = True,
@@ -92,6 +96,7 @@ def predict_images(
     tracks = build_pseudotracks_from_images(
         images,
         track_length=track_length,
+        full_track_length=full_track_length,
         image_transform=image_transform,
     )
     return predict_track(model, tracks, device=device, apply_gold=apply_gold, track_layout="BTCHW")
@@ -103,6 +108,7 @@ def predict_group(
     images: Union[Sequence[Union[Image.Image, Tensor]], Tensor],
     *,
     track_length: int,
+    full_track_length: Optional[int] = None,
     image_transform: Any = None,
     active_frame_transform: Any = None,
     device: Optional[Union[torch.device, str]] = None,
@@ -119,6 +125,7 @@ def predict_group(
     track = build_track_from_images(
         images,
         track_length=track_length,
+        full_track_length=full_track_length,
         image_transform=image_transform,
         active_frame_transform=active_frame_transform,
     )
@@ -131,6 +138,7 @@ def predict_video(
     video: Union[str, Any],
     *,
     track_length: int,
+    full_track_length: Optional[int] = None,
     image_transform: Any = None,
     active_frame_transform: Any = None,
     sampling: str = "uniform",
@@ -147,6 +155,7 @@ def predict_video(
     track = build_track_from_video(
         video,
         track_length=track_length,
+        full_track_length=full_track_length,
         image_transform=image_transform,
         active_frame_transform=active_frame_transform,
         sampling=sampling,

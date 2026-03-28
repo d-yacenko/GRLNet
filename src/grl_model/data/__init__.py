@@ -7,6 +7,7 @@ from .adapters import (
     canonicalize_track_batch,
 )
 from .datasets import ImageFolderPseudoTrackDataset, SequenceFolderDataset, TrackFolderDataset
+from .datasets import PairAugSequenceFolderDataset
 
 __all__ = [
     "apply_gold_protocol",
@@ -16,6 +17,7 @@ __all__ = [
     "build_track_from_video",
     "canonicalize_track_batch",
     "ImageFolderPseudoTrackDataset",
+    "PairAugSequenceFolderDataset",
     "SequenceFolderDataset",
     "TrackFolderDataset",
 ]

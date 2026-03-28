@@ -17,6 +17,7 @@ from .models import (
     GRLClassifier,
     GRLDebugClassifier,
     GRLWeights,
+    StabilizedHOnlyRecurrentClassifier,
 )
 
 __all__ = [
@@ -24,5 +25,6 @@ __all__ = [
     "DebugConvLSTMCell",
     "GRLClassifier",
     "GRLDebugClassifier",
+    "StabilizedHOnlyRecurrentClassifier",
     "GRLWeights",
 ]

@@ -36,6 +36,18 @@ def _normalize_image_group(images: Union[ImageLike, Sequence[ImageLike], Tensor]
     return list(images)
 
 
+def _resolve_full_track_length(track_length: int, full_track_length: Optional[int]) -> int:
+    active_length = int(track_length)
+    total_length = active_length * 3 if full_track_length is None else int(full_track_length)
+    if active_length <= 0:
+        raise ValueError("track_length must be positive")
+    if total_length < active_length:
+        raise ValueError(
+            f"full_track_length must be >= track_length, got full_track_length={total_length}, track_length={active_length}"
+        )
+    return total_length
+
+
 def canonicalize_track_batch(track: Tensor, *, layout: str = "BTCHW") -> Tensor:
     """Convert an explicitly declared track layout to the canonical ``[B, T, C, H, W]`` form.
 
@@ -91,6 +103,7 @@ def build_track_from_images(
     images: Union[ImageLike, Sequence[ImageLike], Tensor],
     *,
     track_length: int,
+    full_track_length: Optional[int] = None,
     image_transform: Optional[Callable[[Any], Tensor]] = None,
     active_frame_transform: Optional[Callable[[Tensor], Tensor]] = None,
     sampling: str = "uniform",
@@ -124,7 +137,9 @@ def build_track_from_images(
         active.append(tensor)
 
     active_tensor = torch.stack(active, dim=0)
-    zeros = torch.zeros((track_length * 2,) + tuple(active_tensor.shape[1:]), dtype=active_tensor.dtype)
+    total_length = _resolve_full_track_length(track_length, full_track_length)
+    zero_tail_length = total_length - int(track_length)
+    zeros = torch.zeros((zero_tail_length,) + tuple(active_tensor.shape[1:]), dtype=active_tensor.dtype)
     return torch.cat((active_tensor, zeros), dim=0)
 
 
@@ -132,6 +147,7 @@ def build_pseudotrack_from_image(
     image: ImageLike,
     *,
     track_length: int,
+    full_track_length: Optional[int] = None,
     image_transform: Optional[Callable[[Any], Tensor]] = None,
     active_frame_transform: Optional[Callable[[Tensor], Tensor]] = None,
 ) -> Tensor:
@@ -139,6 +155,7 @@ def build_pseudotrack_from_image(
     return build_track_from_images(
         image,
         track_length=track_length,
+        full_track_length=full_track_length,
         image_transform=image_transform,
         active_frame_transform=active_frame_transform,
         sampling="head",
@@ -149,6 +166,7 @@ def build_pseudotracks_from_images(
     images: Union[Sequence[ImageLike], Tensor],
     *,
     track_length: int,
+    full_track_length: Optional[int] = None,
     image_transform: Optional[Callable[[Any], Tensor]] = None,
     active_frame_transform: Optional[Callable[[Tensor], Tensor]] = None,
 ) -> Tensor:
@@ -168,6 +186,7 @@ def build_pseudotracks_from_images(
         build_pseudotrack_from_image(
             image,
             track_length=track_length,
+            full_track_length=full_track_length,
             image_transform=image_transform,
             active_frame_transform=active_frame_transform,
         )
@@ -180,6 +199,7 @@ def build_track_from_video(
     video: VideoLike,
     *,
     track_length: int,
+    full_track_length: Optional[int] = None,
     image_transform: Optional[Callable[[Any], Tensor]] = None,
     active_frame_transform: Optional[Callable[[Tensor], Tensor]] = None,
     sampling: str = "uniform",
@@ -211,6 +231,7 @@ def build_track_from_video(
     return build_track_from_images(
         video,
         track_length=track_length,
+        full_track_length=full_track_length,
         image_transform=image_transform,
         active_frame_transform=active_frame_transform,
         sampling=sampling,
@@ -222,6 +243,7 @@ def apply_gold_protocol(
     *,
     frame_transform: Optional[Callable[[Tensor], Tensor]] = None,
     anchor_index: Optional[int] = None,
+    active_length: Optional[int] = None,
 ) -> Tensor:
     """Apply the notebook gold protocol to a track tensor on CPU. / Применить gold-протокол ноутбука к тензору трека на CPU.
 
@@ -241,9 +263,11 @@ def apply_gold_protocol(
         raise RuntimeError("apply_gold_protocol must run on CPU before moving the batch to device")
 
     for b in range(len(x)):
-        n = x[b].shape[0] // 3
+        n = int(active_length) if active_length is not None else x[b].shape[0] // 3
         if n <= 0:
             continue
+        if n > x[b].shape[0]:
+            raise ValueError(f"active_length must be <= track length, got active_length={n}, total={x[b].shape[0]}")
         t = anchor_index if anchor_index is not None else random.randint(0, n - 1)
         for i in range(n):
             if i == t:

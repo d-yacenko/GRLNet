@@ -376,6 +376,7 @@ def fit_reference(
     best_val_acc = 0.0
     best_val_loss = float("inf")
     since = time.time()
+    gold_active_length = int(getattr(model, "seq_len_train", 0) or 0) or None
 
     for epoch in range(config.epochs):
         for phase in phases:
@@ -401,9 +402,9 @@ def fit_reference(
 
             for batch_idx, (inputs, labels) in enumerate(dataloaders[phase], start=1):
                 if phase == "train" and config.train_gold_prob > 0.0 and random.random() < config.train_gold_prob:
-                    inputs = apply_gold_protocol(inputs)
+                    inputs = apply_gold_protocol(inputs, active_length=gold_active_length)
                 if phase == "gold":
-                    inputs = apply_gold_protocol(inputs)
+                    inputs = apply_gold_protocol(inputs, active_length=gold_active_length)
 
                 inputs = inputs.to(device, non_blocking=True)
                 labels = labels.to(device, non_blocking=True)
