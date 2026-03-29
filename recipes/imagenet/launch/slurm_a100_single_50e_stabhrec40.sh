@@ -18,6 +18,8 @@ EVAL_ROOT="${EVAL_ROOT:-/home/faenna/grl/image-net1000/layout/val}"
 GOLD_ROOT="${GOLD_ROOT:-}"
 OUTPUT_DIR="${OUTPUT_DIR:-/home/faenna/grl/runs/stabhrec40_a100_single_50e}"
 CONFIG_PATH="${CONFIG_PATH:-$REPO_DIR/recipes/imagenet/configs/stabhrec40_a100_single_50e.yaml}"
+TRAIN_BATCH_SIZE="${TRAIN_BATCH_SIZE:-}"
+EVAL_BATCH_SIZE="${EVAL_BATCH_SIZE:-}"
 
 cd "$REPO_DIR"
 source "$VENV_ACTIVATE"
@@ -39,6 +41,12 @@ CMD=(
 
 if [[ -n "$GOLD_ROOT" ]]; then
   CMD+=(--gold-root "$GOLD_ROOT")
+fi
+if [[ -n "$TRAIN_BATCH_SIZE" ]]; then
+  CMD+=(--per-gpu-batch-size "$TRAIN_BATCH_SIZE")
+fi
+if [[ -n "$EVAL_BATCH_SIZE" ]]; then
+  CMD+=(--per-gpu-eval-batch-size "$EVAL_BATCH_SIZE")
 fi
 
 "${CMD[@]}"
