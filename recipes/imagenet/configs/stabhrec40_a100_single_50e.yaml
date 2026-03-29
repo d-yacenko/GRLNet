@@ -19,8 +19,8 @@ data:
   gold_root: ""
   image_size: 224
   eval_resize_size: 224
-  per_gpu_batch_size: 64
-  per_gpu_eval_batch_size: 128
+  per_gpu_batch_size: 160
+  per_gpu_eval_batch_size: 320
   workers: 16
   persistent_workers: true
   prefetch_factor: 4
