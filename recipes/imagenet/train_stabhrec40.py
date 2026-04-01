@@ -180,6 +180,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--epochs", type=int, default=None)
     parser.add_argument("--per-gpu-batch-size", type=int, default=None)
     parser.add_argument("--per-gpu-eval-batch-size", type=int, default=None)
+    parser.add_argument("--grad-accum-steps", type=int, default=None)
     parser.add_argument("--workers", type=int, default=None)
     parser.add_argument("--resume", default=None)
     parser.add_argument("--checkpoint-prefix", default=None)
@@ -207,6 +208,8 @@ def apply_overrides(config: RecipeConfig, args: argparse.Namespace) -> RecipeCon
         config.data.per_gpu_batch_size = int(args.per_gpu_batch_size)
     if args.per_gpu_eval_batch_size is not None:
         config.data.per_gpu_eval_batch_size = int(args.per_gpu_eval_batch_size)
+    if args.grad_accum_steps is not None:
+        config.train.grad_accum_steps = int(args.grad_accum_steps)
     if args.workers is not None:
         config.data.workers = int(args.workers)
     if args.resume is not None:

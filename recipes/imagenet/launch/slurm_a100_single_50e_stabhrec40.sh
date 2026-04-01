@@ -20,6 +20,7 @@ OUTPUT_DIR="${OUTPUT_DIR:-/home/faenna/grl/runs/stabhrec40_a100_single_50e}"
 CONFIG_PATH="${CONFIG_PATH:-$REPO_DIR/recipes/imagenet/configs/stabhrec40_a100_single_50e.yaml}"
 TRAIN_BATCH_SIZE="${TRAIN_BATCH_SIZE:-}"
 EVAL_BATCH_SIZE="${EVAL_BATCH_SIZE:-}"
+GRAD_ACCUM_STEPS="${GRAD_ACCUM_STEPS:-}"
 
 cd "$REPO_DIR"
 source "$VENV_ACTIVATE"
@@ -47,6 +48,9 @@ if [[ -n "$TRAIN_BATCH_SIZE" ]]; then
 fi
 if [[ -n "$EVAL_BATCH_SIZE" ]]; then
   CMD+=(--per-gpu-eval-batch-size "$EVAL_BATCH_SIZE")
+fi
+if [[ -n "$GRAD_ACCUM_STEPS" ]]; then
+  CMD+=(--grad-accum-steps "$GRAD_ACCUM_STEPS")
 fi
 
 "${CMD[@]}"
