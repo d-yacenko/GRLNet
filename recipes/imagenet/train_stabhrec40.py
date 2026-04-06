@@ -181,8 +181,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--per-gpu-batch-size", type=int, default=None)
     parser.add_argument("--per-gpu-eval-batch-size", type=int, default=None)
     parser.add_argument("--grad-accum-steps", type=int, default=None)
+    parser.add_argument("--lr", type=float, default=None)
+    parser.add_argument("--weight-decay", type=float, default=None)
+    parser.add_argument("--momentum", type=float, default=None)
+    parser.add_argument("--warmup-epochs", type=int, default=None)
     parser.add_argument("--workers", type=int, default=None)
     parser.add_argument("--resume", default=None)
+    parser.add_argument("--resume-reset-optimizer", action="store_true")
+    parser.add_argument("--resume-reset-scheduler", action="store_true")
+    parser.add_argument("--resume-reset-scaler", action="store_true")
     parser.add_argument("--checkpoint-prefix", default=None)
     parser.add_argument("--progress-every-batches", type=int, default=None)
     parser.add_argument("--progress-every-samples", type=int, default=None)
@@ -210,6 +217,14 @@ def apply_overrides(config: RecipeConfig, args: argparse.Namespace) -> RecipeCon
         config.data.per_gpu_eval_batch_size = int(args.per_gpu_eval_batch_size)
     if args.grad_accum_steps is not None:
         config.train.grad_accum_steps = int(args.grad_accum_steps)
+    if args.lr is not None:
+        config.optimizer.lr = float(args.lr)
+    if args.weight_decay is not None:
+        config.optimizer.weight_decay = float(args.weight_decay)
+    if args.momentum is not None:
+        config.optimizer.momentum = float(args.momentum)
+    if args.warmup_epochs is not None:
+        config.train.warmup_epochs = int(args.warmup_epochs)
     if args.workers is not None:
         config.data.workers = int(args.workers)
     if args.resume is not None:
@@ -397,20 +412,50 @@ def build_optimizer(model: nn.Module, config: RecipeConfig) -> torch.optim.Optim
     )
 
 
-def build_scheduler(optimizer: torch.optim.Optimizer, config: RecipeConfig) -> torch.optim.lr_scheduler.LambdaLR:
+def lr_multiplier_for_epoch(config: RecipeConfig, epoch: int) -> float:
     epochs = int(config.train.epochs)
     warmup_epochs = max(0, min(int(config.train.warmup_epochs), max(1, epochs - 1)))
+    if warmup_epochs > 0 and epoch < warmup_epochs:
+        return 0.2 + 0.8 * ((epoch + 1) / warmup_epochs)
+    if epochs <= warmup_epochs:
+        return 1.0
+    progress = (epoch - warmup_epochs) / max(1, epochs - warmup_epochs - 1)
+    cosine = 0.5 * (1.0 + math.cos(math.pi * progress))
+    return 0.1 + 0.9 * cosine
 
+
+def build_scheduler(optimizer: torch.optim.Optimizer, config: RecipeConfig) -> torch.optim.lr_scheduler.LambdaLR:
     def lr_lambda(epoch: int) -> float:
-        if warmup_epochs > 0 and epoch < warmup_epochs:
-            return 0.2 + 0.8 * ((epoch + 1) / warmup_epochs)
-        if epochs <= warmup_epochs:
-            return 1.0
-        progress = (epoch - warmup_epochs) / max(1, epochs - warmup_epochs - 1)
-        cosine = 0.5 * (1.0 + math.cos(math.pi * progress))
-        return 0.1 + 0.9 * cosine
+        return lr_multiplier_for_epoch(config, epoch)
 
     return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
+
+
+def set_optimizer_lrs(
+    optimizer: torch.optim.Optimizer,
+    *,
+    current_lr: float,
+    initial_lr: Optional[float] = None,
+) -> None:
+    for group in optimizer.param_groups:
+        group["lr"] = float(current_lr)
+        if initial_lr is not None or "initial_lr" in group:
+            group["initial_lr"] = float(group["lr"] if initial_lr is None else initial_lr)
+
+
+def align_scheduler_to_resume_epoch(
+    optimizer: torch.optim.Optimizer,
+    scheduler: torch.optim.lr_scheduler.LambdaLR,
+    config: RecipeConfig,
+    start_epoch: int,
+) -> None:
+    base_lr = float(config.optimizer.lr)
+    current_lr = base_lr * lr_multiplier_for_epoch(config, start_epoch)
+    set_optimizer_lrs(optimizer, current_lr=current_lr, initial_lr=base_lr)
+    scheduler.base_lrs = [base_lr for _ in optimizer.param_groups]
+    scheduler.last_epoch = int(start_epoch)
+    scheduler._step_count = int(start_epoch) + 1
+    scheduler._last_lr = [current_lr for _ in optimizer.param_groups]
 
 
 def create_ema_model(model: nn.Module) -> nn.Module:
@@ -539,6 +584,9 @@ def load_checkpoint_state(
     optimizer: Optional[torch.optim.Optimizer],
     scheduler: Optional[torch.optim.lr_scheduler.LambdaLR],
     scaler: Optional[torch.amp.GradScaler],
+    load_optimizer_state: bool = True,
+    load_scheduler_state: bool = True,
+    load_scaler_state: bool = True,
 ) -> dict[str, Any]:
     checkpoint = torch.load(path, map_location="cpu", weights_only=False)
     state = checkpoint["model"] if isinstance(checkpoint, dict) and "model" in checkpoint else checkpoint
@@ -546,11 +594,11 @@ def load_checkpoint_state(
     if ema_model is not None and isinstance(checkpoint, dict) and checkpoint.get("ema_model") is not None:
         ema_model.load_state_dict(normalize_state_dict_keys(checkpoint["ema_model"]), strict=True)
     if isinstance(checkpoint, dict):
-        if optimizer is not None and checkpoint.get("optimizer") is not None:
+        if load_optimizer_state and optimizer is not None and checkpoint.get("optimizer") is not None:
             optimizer.load_state_dict(checkpoint["optimizer"])
-        if scheduler is not None and checkpoint.get("scheduler") is not None:
+        if load_scheduler_state and scheduler is not None and checkpoint.get("scheduler") is not None:
             scheduler.load_state_dict(checkpoint["scheduler"])
-        if scaler is not None and checkpoint.get("scaler") is not None:
+        if load_scaler_state and scaler is not None and checkpoint.get("scaler") is not None:
             scaler.load_state_dict(checkpoint["scaler"])
     return checkpoint if isinstance(checkpoint, dict) else {}
 
@@ -707,6 +755,9 @@ def main() -> None:
                 optimizer=optimizer,
                 scheduler=scheduler,
                 scaler=scaler,
+                load_optimizer_state=not args.resume_reset_optimizer,
+                load_scheduler_state=not args.resume_reset_scheduler,
+                load_scaler_state=not args.resume_reset_scaler,
             )
             start_epoch = int(checkpoint.get("epoch", 0))
             global_step = int(checkpoint.get("global_step", 0))
@@ -715,6 +766,16 @@ def main() -> None:
             best_val_acc_top5 = float(checkpoint.get("best_val_acc_top5", best_val_acc_top5))
             best_gold_acc = float(checkpoint.get("best_gold_acc", best_gold_acc))
             best_gold_acc_top5 = float(checkpoint.get("best_gold_acc_top5", best_gold_acc_top5))
+            if args.resume_reset_scheduler:
+                align_scheduler_to_resume_epoch(optimizer, scheduler, config, start_epoch)
+            elif args.resume_reset_optimizer and scheduler is not None and getattr(scheduler, "_last_lr", None):
+                base_lrs = list(getattr(scheduler, "base_lrs", []))
+                target_lrs = list(getattr(scheduler, "_last_lr", []))
+                for idx, group in enumerate(optimizer.param_groups):
+                    if idx < len(target_lrs):
+                        group["lr"] = float(target_lrs[idx])
+                    if idx < len(base_lrs):
+                        group["initial_lr"] = float(base_lrs[idx])
 
         if start_epoch == 0 and ctx.is_main_process and dataloaders["val"] is not None:
             init_val = evaluate_phase(
