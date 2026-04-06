@@ -30,4 +30,4 @@ export RESUME_RESET_OPTIMIZER="${RESUME_RESET_OPTIMIZER:-1}"
 export RESUME_RESET_SCHEDULER="${RESUME_RESET_SCHEDULER:-1}"
 export RESUME_RESET_SCALER="${RESUME_RESET_SCALER:-1}"
 
-exec "$REPO_DIR/recipes/imagenet/launch/slurm_a100_single_50e_stabhrec40.sh"
+exec bash "$REPO_DIR/recipes/imagenet/launch/slurm_a100_single_50e_stabhrec40.sh"

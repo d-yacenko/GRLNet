@@ -1,0 +1,219 @@
+\documentclass[11pt,landscape]{article}
+\usepackage[margin=10mm]{geometry}
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[T2A]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage[russian,english]{babel}
+\else
+  \usepackage{fontspec}
+  \usepackage{polyglossia}
+  \setdefaultlanguage{russian}
+  \setotherlanguage{english}
+  \setmainfont{DejaVu Serif}
+  \setsansfont{DejaVu Sans}
+  \setmonofont{DejaVu Sans Mono}
+\fi
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, fit, backgrounds, calc, decorations.pathreplacing}
+\pagestyle{empty}
+
+\begin{document}
+
+\noindent\makebox[\textwidth][c]{\Large GRLNet-StabhRec: single-layer recurrent architecture}
+
+\vspace{2mm}
+
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+    >=Latex,
+    font=\small,
+    io/.style={draw, rounded corners=3pt, very thick, align=center, inner sep=4pt, fill=green!7, minimum width=25mm, minimum height=11mm},
+    block/.style={draw, rounded corners=3pt, very thick, align=center, inner sep=4pt, fill=blue!6, minimum width=31mm, minimum height=13mm},
+    state/.style={draw, rounded corners=3pt, very thick, align=center, inner sep=4pt, fill=cyan!7, minimum width=26mm, minimum height=11mm},
+    head/.style={draw, rounded corners=3pt, very thick, align=center, inner sep=4pt, fill=orange!10, minimum width=28mm, minimum height=11mm},
+    op/.style={draw, rounded corners=2pt, thick, align=center, inner sep=3pt, fill=yellow!10, minimum width=21mm, minimum height=9mm},
+    main/.style={->, very thick},
+    hpath/.style={->, very thick, draw=teal!70!black},
+    cpath/.style={->, very thick, draw=magenta!75!black},
+    auxpath/.style={->, thick, dashed, draw=orange!80!black},
+    note/.style={draw, rounded corners=2pt, align=left, inner sep=3pt, fill=white, text width=42mm}
+]
+
+% --------------------------------------------------------------------------
+% Overall architecture
+% --------------------------------------------------------------------------
+\node[io, minimum width=22mm] (input) at (0.0,4.7) {Input image\\$3 \times 224 \times 224$};
+
+\node[block, minimum width=36mm] (stem) at (3.9,4.7) {Stem\\ConvGNAct $5\times5$/2\\ConvGNAct $3\times3$\\MaxPool $3\times3$/2\\ConvGNAct $3\times3$\\$64 \times 56 \times 56$};
+
+\node[block, minimum width=29mm] (seed) at (8.9,4.7) {$h$-seed\\Conv $64 \to 192$\\GroupNorm + SiLU\\$192 \times 56 \times 56$};
+
+\node[state, minimum width=25mm] (init) at (12.8,4.7) {Initial state\\$h_0 = h_{\text{seed}}$\\$c_0 = 0$};
+
+\node[block, minimum width=36mm, minimum height=18mm] (unroll) at (19.2,4.7) {Общая рекуррентная\\ячейка\\одни веса на всех шагах\\итерации $t=1,\dots,12$\\$(h_{t-1},c_{t-1}) \mapsto (h_t,c_t)$};
+
+\draw[main] (input.east) -- (stem.west);
+\draw[main] (stem.east) -- (seed.west);
+\draw[main] (seed.east) -- (init.west);
+\draw[main] (init.east) -- (unroll.west);
+
+\draw[hpath] ($(unroll.east)+(0,3mm)$) .. controls +(18mm,0) and +(18mm,0) .. ($(unroll.east)+(0,-3mm)$);
+\node[anchor=south, font=\scriptsize, text=teal!70!black, fill=white, inner sep=1pt] at ($(unroll.east)+(17mm,4mm)$) {$h_t \rightarrow h_{t+1}$};
+\draw[cpath] ($(unroll.west)+(0,3mm)$) .. controls +(-16mm,0) and +(-16mm,0) .. ($(unroll.west)+(0,-3mm)$);
+\node[anchor=north, font=\scriptsize, text=magenta!75!black, fill=white, inner sep=1pt] at ($(unroll.west)+(-14mm,-4mm)$) {$c_t \rightarrow c_{t+1}$};
+
+\draw[decorate, decoration={brace, amplitude=5pt}] ($(unroll.south west)+(-2mm,-4mm)$) -- ($(unroll.south east)+(2mm,-4mm)$)
+    node[midway, below=6pt] {\scriptsize рекуррентная развертка с фиксированным пространственным разрешением};
+
+% Late readouts
+\coordinate (tap10) at ($(unroll.east)+(0,14mm)$);
+\coordinate (tap11) at ($(unroll.east)+(0,0mm)$);
+\coordinate (tap12) at ($(unroll.east)+(0,-14mm)$);
+
+\node[op, minimum width=24mm] (ro10) at (25.6,6.1) {Readout\\step 10\\$[GAP(h_{10}); GAP(c_{10})]$};
+\node[op, minimum width=24mm] (ro11) at (25.6,4.7) {Readout\\step 11\\$[GAP(h_{11}); GAP(c_{11})]$};
+\node[op, minimum width=24mm] (ro12) at (25.6,3.3) {Readout\\step 12\\$[GAP(h_{12}); GAP(c_{12})]$};
+
+\draw[hpath] (tap10) -- (ro10.west);
+\draw[hpath] (tap11) -- (ro11.west);
+\draw[hpath] (tap12) -- (ro12.west);
+
+\node[head, minimum width=26mm] (auxhead) at (31.0,5.7) {Aux head\\LayerNorm\\Linear $384\to256$\\GELU, Dropout\\Linear $\to K$};
+\node[head, minimum width=26mm] (mainhead) at (31.0,3.3) {Main head\\LayerNorm\\Linear $384\to512$\\GELU, Dropout\\Linear $\to K$};
+
+\draw[auxpath] (ro10.east) -- (auxhead.west);
+\draw[auxpath] (ro11.east) -- (auxhead.west);
+\draw[main] (ro12.east) -- (mainhead.west);
+
+\node[io, minimum width=21mm] (auxlogits) at (35.4,5.7) {Aux logits\\$y'_{10}, y'_{11}$};
+\node[io, minimum width=21mm] (mainlogits) at (35.4,3.3) {Main logits\\$y$};
+
+\draw[auxpath] (auxhead.east) -- (auxlogits.west);
+\draw[main] (mainhead.east) -- (mainlogits.west);
+
+\node[note, text width=48mm] (n1) at (35.1,0.45) {
+\textbf{Поздняя супервизия.}\\
+Блок чтения подключается только к последним трем шагам.
+Вспомогательная голова используется для шагов 10 и 11 во время обучения;
+основная голова использует шаг 12 и сохраняется для инференса.
+};
+
+\begin{scope}[on background layer]
+    \node[draw, rounded corners=4pt, thick, fit=(input)(stem)(seed)(init)(unroll)(ro10)(ro11)(ro12)(auxhead)(mainhead)(auxlogits)(mainlogits)(n1), inner sep=6pt, fill=gray!3] {};
+\end{scope}
+
+\end{tikzpicture}
+}
+
+\vspace{4mm}
+
+\noindent\textbf{Текстовое описание общей схемы.}
+Входное изображение размера $3\times224\times224$ сначала обрабатывается блоком \textit{stem}, который уменьшает пространственное разрешение до $56\times56$ и формирует карту признаков размера $64\times56\times56$. Затем блок $h$-seed отображает этот тензор в скрытое рекуррентное пространство, создавая начальное состояние $h_0\in\mathbb{R}^{192\times56\times56}$, тогда как состояние памяти инициализируется как $c_0=0$.
+
+\medskip
+
+\noindent
+Ядром модели является одна общая рекуррентная ячейка, применяемая в течение 12 последовательных шагов. Одни и те же параметры ячейки используются на каждом шаге, поэтому сеть увеличивает эффективную глубину за счет итеративного уточнения, а не за счет стека различных слоев. В течение всей рекуррентной развертки и скрытое состояние, и состояние памяти остаются на одной и той же пространственной сетке.
+
+\medskip
+
+\noindent
+Предсказания снимаются не с каждого рекуррентного шага. Вместо этого блоки readout подключаются только к последним трем шагам, а именно к шагам 10, 11 и 12. На каждом из этих шагов модель выполняет глобальный average pooling как для $h_t$, так и для $c_t$, конкатенирует полученные векторы и использует итоговое представление как вход классификатора.
+
+\medskip
+
+\noindent
+Финальная предиктовая голова работает с readout шага 12 и формирует logits для инференса. Во время обучения дополнительная auxiliary-head применяется также к readout шагов 10 и 11, обеспечивая позднюю дополнительную супервизию. Таким образом, при инференсе используется только последнее рекуррентное состояние, тогда как обучение получает дополнительный сигнал ошибки на двух предшествующих поздних шагах.
+
+\vspace{5mm}
+
+\noindent\textbf{Отдельная схема Stem.}
+
+\vspace{2mm}
+
+\begin{center}
+\begin{tikzpicture}[
+    >=Latex,
+    font=\small,
+    stemio/.style={draw, rounded corners=3pt, very thick, align=center, inner sep=4pt, fill=green!7, minimum width=23mm, minimum height=10mm},
+    stemblock/.style={draw, rounded corners=3pt, very thick, align=center, inner sep=3pt, fill=blue!6, minimum width=24mm, minimum height=12mm, text width=22mm},
+    stemmain/.style={->, very thick}
+]
+
+\node[stemio] (sin) at (0,0) {Вход\\$3\times224\times224$};
+
+\node[stemblock] (s1) at (3.4,0) {Conv\\GroupNorm\\SiLU\\$5\times5$, stride 2\\$3 \to 64$\\$64\times112\times112$};
+\node[stemblock] (s2) at (6.8,0) {Conv\\GroupNorm\\SiLU\\$3\times3$, stride 1\\$64 \to 64$\\$64\times112\times112$};
+\node[stemblock] (s3) at (10.2,0) {MaxPool\\$3\times3$, stride 2\\каналы без изм.\\$64\times56\times56$};
+\node[stemblock] (s4) at (13.6,0) {Conv\\GroupNorm\\SiLU\\$3\times3$, stride 1\\$64 \to 64$\\$64\times56\times56$};
+
+\node[stemio] (sout) at (16.9,0) {Выход stem\\$64\times56\times56$};
+
+\draw[stemmain] (sin.east) -- (s1.west);
+\draw[stemmain] (s1.east) -- (s2.west);
+\draw[stemmain] (s2.east) -- (s3.west);
+\draw[stemmain] (s3.east) -- (s4.west);
+\draw[stemmain] (s4.east) -- (sout.west);
+
+\end{tikzpicture}
+\end{center}
+
+\vspace{1mm}
+
+\noindent\textbf{Краткое описание блока Stem.}
+Первый сверточный слой с ядром $5\times5$ и шагом 2 выполняет начальное извлечение локальных признаков и одновременно уменьшает пространственное разрешение входа. Второй сверточный слой $3\times3$ уточняет полученные низкоуровневые признаки без изменения числа каналов и пространственного масштаба. Затем операция max-pooling дополнительно уменьшает разрешение, сохраняя наиболее выраженные локальные ответы. Последний сверточный слой $3\times3$ формирует итоговое представление блока \textit{stem} размера $64\times56\times56$, которое затем подается на вход блока $h$-seed для инициализации рекуррентного скрытого состояния.
+
+\newpage
+
+\noindent\textbf{Отдельная схема рекуррентной ячейки.}
+
+\vspace{2mm}
+
+\begin{center}
+\includegraphics[width=\textwidth]{grlnet_stabhrec40.drawio.pdf}
+\end{center}
+
+\vspace{1mm}
+
+\noindent\textbf{Подробное описание этапов обработки в рекуррентной ячейке.}
+На вход ячейки поступают два состояния предыдущего шага: скрытое состояние $h_{t-1}$ и состояние памяти $c_{t-1}$. Сначала из $h_{t-1}$ через ветку \textit{gate branch} последовательно вычисляются нормализованные и нелинейно преобразованные признаки, после чего свертка формирует тензор из четырех групп каналов. Этот тензор разбивается на сырые карты $i_{raw}$, $f_{raw}$, $o_{raw}$ и $g_{raw}$, соответствующие входным воротам, воротам забывания, выходным воротам и кандидату обновления памяти.
+
+\medskip
+
+\noindent
+Далее к ветви забывания добавляется константный \textit{forget bias}, после чего применяются нелинейности: сигмоида для $i_t$, $f_t$ и $o_t$, а гиперболический тангенс для $g_t$. Состояние памяти обновляется по LSTM-подобному правилу
+\[
+c_t = f_t \odot c_{t-1} + i_t \odot g_t,
+\]
+где одна часть старой памяти сохраняется через $f_t$, а новая информация записывается через $i_t$ и $g_t$.
+
+\medskip
+
+\noindent
+После этого новое состояние памяти $c_t$ нормализуется, проходит через функцию $\tanh$ и затем поэлементно умножается на выходные ворота $o_t$. Так формируется основной кандидат обновления скрытого состояния
+\[
+hidden_t = o_t \odot \tanh(GN(c_t)).
+\]
+Этот сигнал отражает основной результат текущего рекуррентного шага.
+
+\medskip
+
+\noindent
+Затем $hidden_t$ подается в дополнительную ветку \textit{delta / refine}, состоящую из двух последовательных блоков \textit{GroupNorm $\rightarrow$ SiLU $\rightarrow$ Conv}. Эта ветка вычисляет корректирующую добавку $\delta_t$, предназначенную для более тонкого нелинейного уточнения скрытого состояния. Таким образом, основная ветвь задает базовое gated-обновление, а refine-ветка формирует дополнительную поправку к нему.
+
+\medskip
+
+\noindent
+На последнем этапе старое скрытое состояние $h_{t-1}$ передается по residual-связи напрямую к выходу ячейки. К нему добавляются два новых вклада: основной сигнал $hidden_t$ и корректирующий сигнал $\delta_t$, каждый со своим обучаемым скалярным коэффициентом:
+\[
+h_t = h_{t-1} + a \cdot hidden_t + b \cdot \delta_t,
+\qquad
+a=\sigma(hidden\_scale), \quad b=\sigma(delta\_scale).
+\]
+Коэффициенты $a$ и $b$ являются обучаемыми глобальными весами, которые регулируют, насколько сильно в итоговое скрытое состояние должны входить основной gated-update и refine-поправка. В результате выходами ячейки становятся обновленные состояния $c_t$ и $h_t$, сохраняющие ту же пространственную структуру, что и на входе.
+
+\end{document}
