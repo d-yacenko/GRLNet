@@ -96,6 +96,7 @@ class TrainConfig:
     mixup_prob: float = 0.5
     ema_decay: float = 0.999
     warmup_epochs: int = 5
+    lr_min_ratio: float = 0.1
     aux_weight: float = 0.2
     aux_weight_final: float = 0.05
 
@@ -182,6 +183,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--per-gpu-eval-batch-size", type=int, default=None)
     parser.add_argument("--grad-accum-steps", type=int, default=None)
     parser.add_argument("--lr", type=float, default=None)
+    parser.add_argument("--lr-min-ratio", type=float, default=None)
     parser.add_argument("--weight-decay", type=float, default=None)
     parser.add_argument("--momentum", type=float, default=None)
     parser.add_argument("--warmup-epochs", type=int, default=None)
@@ -219,6 +221,8 @@ def apply_overrides(config: RecipeConfig, args: argparse.Namespace) -> RecipeCon
         config.train.grad_accum_steps = int(args.grad_accum_steps)
     if args.lr is not None:
         config.optimizer.lr = float(args.lr)
+    if args.lr_min_ratio is not None:
+        config.train.lr_min_ratio = float(args.lr_min_ratio)
     if args.weight_decay is not None:
         config.optimizer.weight_decay = float(args.weight_decay)
     if args.momentum is not None:
@@ -415,13 +419,14 @@ def build_optimizer(model: nn.Module, config: RecipeConfig) -> torch.optim.Optim
 def lr_multiplier_for_epoch(config: RecipeConfig, epoch: int) -> float:
     epochs = int(config.train.epochs)
     warmup_epochs = max(0, min(int(config.train.warmup_epochs), max(1, epochs - 1)))
+    min_ratio = max(0.0, min(float(config.train.lr_min_ratio), 1.0))
     if warmup_epochs > 0 and epoch < warmup_epochs:
         return 0.2 + 0.8 * ((epoch + 1) / warmup_epochs)
     if epochs <= warmup_epochs:
         return 1.0
     progress = (epoch - warmup_epochs) / max(1, epochs - warmup_epochs - 1)
     cosine = 0.5 * (1.0 + math.cos(math.pi * progress))
-    return 0.1 + 0.9 * cosine
+    return min_ratio + (1.0 - min_ratio) * cosine
 
 
 def build_scheduler(optimizer: torch.optim.Optimizer, config: RecipeConfig) -> torch.optim.lr_scheduler.LambdaLR:

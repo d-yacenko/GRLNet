@@ -23,6 +23,7 @@ EVAL_BATCH_SIZE="${EVAL_BATCH_SIZE:-}"
 GRAD_ACCUM_STEPS="${GRAD_ACCUM_STEPS:-}"
 EPOCHS="${EPOCHS:-}"
 LR="${LR:-}"
+LR_MIN_RATIO="${LR_MIN_RATIO:-}"
 WEIGHT_DECAY="${WEIGHT_DECAY:-}"
 MOMENTUM="${MOMENTUM:-}"
 WARMUP_EPOCHS="${WARMUP_EPOCHS:-}"
@@ -66,6 +67,9 @@ if [[ -n "$EPOCHS" ]]; then
 fi
 if [[ -n "$LR" ]]; then
   CMD+=(--lr "$LR")
+fi
+if [[ -n "$LR_MIN_RATIO" ]]; then
+  CMD+=(--lr-min-ratio "$LR_MIN_RATIO")
 fi
 if [[ -n "$WEIGHT_DECAY" ]]; then
   CMD+=(--weight-decay "$WEIGHT_DECAY")

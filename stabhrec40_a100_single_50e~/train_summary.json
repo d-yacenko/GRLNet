@@ -1,0 +1,23 @@
+{
+  "script": "recipes/imagenet/train_stabhrec40.py",
+  "output_dir": "/home/faenna/grl/runs/stabhrec40_a100_single_50e",
+  "world_size": 1,
+  "device": "cuda:0",
+  "best_val_acc": 0.6791,
+  "best_val_acc_top5": 0.87848,
+  "best_gold_acc": null,
+  "best_gold_acc_top5": null,
+  "elapsed_sec": 348094.9542543888,
+  "global_step": 491096,
+  "checkpoint_prefix": "stabhrec40_a100_single_50e",
+  "latest_checkpoint": "/home/faenna/grl/runs/stabhrec40_a100_single_50e/stabhrec40_a100_single_50e_latest.pth",
+  "best_checkpoint": "/home/faenna/grl/runs/stabhrec40_a100_single_50e/stabhrec40_a100_single_50e_best.pth",
+  "best_gold_checkpoint": null,
+  "history_file": "/home/faenna/grl/runs/stabhrec40_a100_single_50e/stabhrec40_a100_single_50e_history.json",
+  "final_acc_train": 0.5016157826628228,
+  "final_acc_top5_train": 0.6619840452104409,
+  "final_acc_val": 0.67864,
+  "final_acc_top5_val": 0.87822,
+  "final_acc_gold": null,
+  "final_acc_top5_gold": null
+}

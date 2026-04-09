@@ -25,8 +25,8 @@
       "gold_root": "",
       "image_size": 224,
       "eval_resize_size": 224,
-      "per_gpu_batch_size": 160,
-      "per_gpu_eval_batch_size": 384,
+      "per_gpu_batch_size": 176,
+      "per_gpu_eval_batch_size": 448,
       "workers": 16,
       "persistent_workers": true,
       "prefetch_factor": 4,
@@ -37,7 +37,7 @@
       "gold_limit": null
     },
     "train": {
-      "epochs": 50,
+      "epochs": 70,
       "grad_accum_steps": 1,
       "gradient_clip_norm": 5.0,
       "use_amp": true,
@@ -48,12 +48,12 @@
       "mixup_alpha": 0.2,
       "mixup_prob": 0.5,
       "ema_decay": 0.999,
-      "warmup_epochs": 5,
+      "warmup_epochs": 0,
       "aux_weight": 0.2,
       "aux_weight_final": 0.05
     },
     "optimizer": {
-      "lr": 0.08,
+      "lr": 0.048,
       "weight_decay": 0.0001,
       "momentum": 0.9
     },
