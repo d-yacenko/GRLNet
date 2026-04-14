@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+message: "If you use this repository, please cite the software entry below."
+title: "GRLNet: Stabilized Recurrent Image Classifier"
+type: software
+authors:
+  - family-names: "Yatsenko"
+    given-names: "D."
+repository-code: "https://github.com/d-yacenko/GRLNet"
+abstract: "PyTorch implementation of GRLNet/StabHRec40, a compact stabilized recurrent image classifier."
+license: "MIT"
