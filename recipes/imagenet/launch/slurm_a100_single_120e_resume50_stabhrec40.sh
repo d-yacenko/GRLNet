@@ -11,12 +11,12 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=96GB
 #SBATCH -t 8-00:00:00
-#SBATCH -o /home/faenna/grl/slurm-%j.out
-#SBATCH -D /home/faenna/grl/GRLNet
+#SBATCH -o slurm-%j.out
 
 set -euo pipefail
 
-REPO_DIR="${REPO_DIR:-/home/faenna/grl/GRLNet}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="${REPO_DIR:-$(cd "$SCRIPT_DIR/../../.." && pwd)}"
 
 export TRAIN_BATCH_SIZE="${TRAIN_BATCH_SIZE:-176}"
 export EVAL_BATCH_SIZE="${EVAL_BATCH_SIZE:-448}"

@@ -5,6 +5,11 @@ type: software
 authors:
   - family-names: "Yatsenko"
     given-names: "D."
+  - family-names: "Petrushin"
+    given-names: "I. S."
+    affiliation: "Irkutsk State University"
 repository-code: "https://github.com/d-yacenko/GRLNet"
 abstract: "PyTorch implementation of GRLNet/StabHRec40, a compact stabilized recurrent image classifier."
 license: "MIT"
+version: "0.3.0"
+date-released: "2026-04-16"

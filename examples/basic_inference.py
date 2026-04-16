@@ -1,16 +1,17 @@
-"""Minimal GRLNet/StabHRec40 inference example."""
+"""Minimal GRLNet/StabHRec40 ImageNet-1K inference example."""
+
+from pathlib import Path
 
 from PIL import Image
 
-from grlnet.inference import decode_topk, load_categories, load_model, predict_image, topk
+from grlnet import GRLNetWeights, grlnet_stabhrec40
+from grlnet.inference import decode_topk, load_categories, predict_image, topk
 
-model = load_model(
-    checkpoint="stabhrec40_a100_single_50e/stabhrec40_a100_single_50e_best.pth",
-    num_classes=1000,
-)
+image_path = Path("sample.jpg")
 
-image = Image.open("sample.jpg").convert("RGB")
-logits = predict_image(model, image, image_size=224, resize_size=224)
+model = grlnet_stabhrec40(weights=GRLNetWeights.DEFAULT)
+image = Image.open(image_path).convert("RGB")
+logits = predict_image(model, image)
 
 categories = load_categories()
 for item in decode_topk(topk(logits, k=5), categories):

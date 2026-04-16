@@ -16,7 +16,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Evaluate GRLNet/StabHRec40 on an ImageFolder validation split.")
     parser.add_argument("--data-root", type=Path, required=True, help="ImageFolder root, e.g. ImageNet val directory.")
     parser.add_argument("--checkpoint", type=Path, default=None)
-    parser.add_argument("--weights", default=None)
+    parser.add_argument("--weights", default=None, help="Registered weights name, URL, or DEFAULT.")
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--image-size", type=int, default=224)

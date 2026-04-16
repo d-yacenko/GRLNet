@@ -1,4 +1,5 @@
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *.so
 
@@ -27,6 +28,17 @@ logs/
 *.pth
 *.pt
 stabhrec40_a100_single_50e/*.pth
+
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.synctex.gz
+*.toc
+*.odt
 
 .DS_Store
 Thumbs.db

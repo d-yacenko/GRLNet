@@ -4,10 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "grlnet"
-version = "0.2.0"
-description = "GRLNet/StabHRec40 recurrent image classifier for PyTorch"
+version = "0.3.0"
+description = "GRLNet/StabHRec40 compact recurrent image classifier for PyTorch"
 readme = "README.md"
 requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [
+  {name = "D. Yatsenko"},
+  {name = "I. S. Petrushin"},
+]
 dependencies = [
   "torch>=2.1",
   "torchvision>=0.16",
@@ -20,6 +25,11 @@ dependencies = [
 dev = [
   "pytest>=8.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/d-yacenko/GRLNet"
+Repository = "https://github.com/d-yacenko/GRLNet"
+Weights = "https://github.com/d-yacenko/GRLNet/releases/tag/v0.3.0"
 
 [project.scripts]
 grlnet-info = "grlnet.cli.info:main"

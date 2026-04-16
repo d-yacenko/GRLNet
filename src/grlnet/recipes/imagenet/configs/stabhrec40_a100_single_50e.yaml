@@ -61,7 +61,7 @@ checkpointing:
   checkpoint_prefix: stabhrec40_a100_single_50e
   save_every_epoch: true
   save_best: true
-  save_best_gold: true
+  save_best_gold: false
   resume_from: auto
 
 runtime:

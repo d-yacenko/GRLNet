@@ -1,8 +1,7 @@
 # GRLNet Agent Context
 
-This repository is now organized around the current GRLNet/StabHRec40 model.
-The older lattice/track-classifier code is historical and must not be treated
-as the public API.
+This repository is organized as a public PyTorch package for
+GRLNet/StabHRec40.
 
 ## Canonical Package
 
@@ -15,13 +14,13 @@ src/grlnet/
   recipes/imagenet/
 ```
 
-The installable project name is `grlnet`; public imports should use:
+Public imports should use:
 
 ```python
 from grlnet import GRLNet, GRLNetWeights, grlnet_stabhrec40
 ```
 
-## Canonical Model
+## Public Model
 
 Model name: `GRLNet` / `StabHRec40`
 
@@ -39,16 +38,16 @@ Tensor[B, num_classes]
 
 Training with `return_aux=True` returns `(main_logits, aux_logits)`.
 
-## Checkpoints
+## Weights
 
-Current local experiment artifacts are in:
+Default weights are loaded through the torchvision-style API:
 
-```text
-stabhrec40_a100_single_50e/
+```python
+model = grlnet_stabhrec40(weights=GRLNetWeights.DEFAULT)
 ```
 
-Training checkpoints contain both `model` and `ema_model`. Inference should
-prefer `ema_model`.
+The default checkpoint is hosted as a GitHub Release asset and loaded via
+`torch.hub` cache with SHA256 verification.
 
 ## Recipe
 
@@ -60,14 +59,9 @@ grlnet-train-imagenet --config src/grlnet/recipes/imagenet/configs/stabhrec40_a1
 
 Main recipe features:
 
-- SGD/Nesterov;
-- mixup;
-- label smoothing;
-- EMA;
-- auxiliary supervision from late recurrent steps;
+- SGD/Nesterov.
+- Mixup.
+- Label smoothing.
+- EMA.
+- Auxiliary supervision from late recurrent steps.
 - AMP and channels-last on CUDA.
-
-## Do Not Reintroduce
-
-Do not re-expose the retired lattice/track API as part of `pyproject.toml`.
-The package finder intentionally includes only `grlnet*`.

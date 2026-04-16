@@ -115,15 +115,20 @@ class GRLNetWeights:
 
     @classmethod
     def get(cls, name: str) -> "GRLNetWeights":
+        if name.upper() == "DEFAULT" and hasattr(cls, "DEFAULT"):
+            return cls.DEFAULT
         try:
             return cls._registry[name]
         except KeyError as exc:
-            available = ", ".join(sorted(cls._registry))
+            available = ", ".join(sorted(cls.names()))
             raise KeyError(f"Unknown GRLNetWeights entry {name!r}. Available: {available}") from exc
 
     @classmethod
     def names(cls) -> set[str]:
-        return set(cls._registry)
+        names = set(cls._registry)
+        if hasattr(cls, "DEFAULT"):
+            names.add("DEFAULT")
+        return names
 
     def get_state_dict(
         self,

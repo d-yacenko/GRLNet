@@ -1,3 +1,4 @@
+import grlnet
 import torch
 
 from grlnet import GRLNet, GRLNetWeights, grlnet_stabhrec40
@@ -37,6 +38,8 @@ def test_extract_prefers_ema_model():
 
 def test_weights_registry_has_default():
     assert GRLNetWeights.DEFAULT.name in GRLNetWeights.names()
+    assert "DEFAULT" in GRLNetWeights.names()
+    assert GRLNetWeights.get("DEFAULT") is GRLNetWeights.DEFAULT
 
 
 def test_default_weights_metadata_points_to_published_release():
@@ -45,3 +48,7 @@ def test_default_weights_metadata_points_to_published_release():
     assert metrics["acc@1"] == 0.69768
     assert metrics["acc@5"] == 0.88964
     assert metrics["sha256"] == "75d586bdd5031fa8fa009fde618b133d5ad429e504cac81636c8daead01be4f2"
+
+
+def test_package_version_matches_release_series():
+    assert grlnet.__version__ == "0.3.0"

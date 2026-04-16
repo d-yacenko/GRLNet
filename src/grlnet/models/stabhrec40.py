@@ -37,7 +37,7 @@ class ConvGNAct(nn.Module):
 
 
 class StabHRec40Cell(nn.Module):
-    """Stabilized H-only recurrent cell used by the current GRLNet model.
+    """Stabilized H-state recurrent cell used by GRLNet/StabHRec40.
 
     The cell keeps a ConvLSTM-like ``C`` memory stream and updates the hidden
     stream with a residual path:
@@ -261,16 +261,11 @@ def grlnet_stabhrec40(*, weights=None, progress: bool = True, **kwargs) -> GRLNe
     return model
 
 
-# Backward-compatible alias for notebooks that used the experimental name.
-StabilizedHOnlyRecurrentClassifier = GRLNet
-
-
 __all__ = [
     "ConvGNAct",
     "GRLNet",
     "GRLNetConfig",
     "StabHRec40Cell",
-    "StabilizedHOnlyRecurrentClassifier",
     "choose_groups",
     "grlnet_stabhrec40",
 ]

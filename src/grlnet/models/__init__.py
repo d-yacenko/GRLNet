@@ -3,7 +3,6 @@ from .stabhrec40 import (
     GRLNet,
     GRLNetConfig,
     StabHRec40Cell,
-    StabilizedHOnlyRecurrentClassifier,
     choose_groups,
     grlnet_stabhrec40,
 )
@@ -15,7 +14,6 @@ __all__ = [
     "GRLNetConfig",
     "GRLNetWeights",
     "StabHRec40Cell",
-    "StabilizedHOnlyRecurrentClassifier",
     "choose_groups",
     "extract_model_state_dict",
     "grlnet_stabhrec40",
