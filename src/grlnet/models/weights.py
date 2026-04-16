@@ -108,8 +108,7 @@ def load_checkpoint_state_dict(
 
 GRLNetWeights.IMAGENET1K_STABHREC40_A100_V1 = GRLNetWeights(
     name="IMAGENET1K_STABHREC40_A100_V1",
-    # Replace this release asset with the final checkpoint URL before tagging.
-    url="https://github.com/d-yacenko/GRLNet/releases/download/v0.2.0/grlnet_stabhrec40_imagenet1k_a100_v1.pth",
+    url="https://github.com/d-yacenko/GRLNet/releases/download/v0.3.0/grlnet_stabhrec40_imagenet1k_a100_v2.pth",
     prefer_ema=True,
     meta={
         "dataset": "ImageNet-1K",
@@ -133,8 +132,11 @@ GRLNetWeights.IMAGENET1K_STABHREC40_A100_V1 = GRLNetWeights(
         },
         "metrics": {
             "ImageNet-1K": {
-                "acc@1": 0.693,
-                "note": "Current in-progress checkpoint; update after final release run.",
+                "acc@1": 0.69768,
+                "acc@5": 0.88964,
+                "epoch": 120,
+                "sha256": "75d586bdd5031fa8fa009fde618b133d5ad429e504cac81636c8daead01be4f2",
+                "note": "120 epoch A100 ImageNet-1K checkpoint.",
             }
         },
     },
