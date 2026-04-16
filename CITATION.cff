@@ -3,7 +3,7 @@ message: "If you use this repository, please cite the software entry below."
 title: "GRLNet: Stabilized Recurrent Image Classifier"
 type: software
 authors:
-  - family-names: "Yatsenko"
+  - family-names: "Iatsenko"
     given-names: "D."
   - family-names: "Petrushin"
     given-names: "I. S."
