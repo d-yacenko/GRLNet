@@ -1,11 +1,72 @@
 from __future__ import annotations
 
+import hashlib
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, ClassVar
+from urllib.error import URLError
+from urllib.parse import urlparse
 
 import torch
-from torch.hub import load_state_dict_from_url
+from torch.hub import get_dir, load_state_dict_from_url
+
+
+def _default_checkpoint_path(url: str) -> Path:
+    filename = Path(urlparse(url).path).name
+    return Path(get_dir()) / "checkpoints" / filename
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _load_state_dict_from_url_with_retries(
+    url: str,
+    *,
+    map_location: str | torch.device = "cpu",
+    progress: bool = True,
+    check_hash: bool = False,
+    expected_sha256: str | None = None,
+    retries: int = 5,
+    retry_delay_sec: float = 2.0,
+) -> object:
+    """Load a checkpoint through torch hub cache with retry and optional sha256 verification."""
+
+    cache_path = _default_checkpoint_path(url)
+    last_error: BaseException | None = None
+    for attempt in range(1, retries + 1):
+        try:
+            payload = load_state_dict_from_url(
+                url,
+                map_location=map_location,
+                progress=progress,
+                check_hash=check_hash,
+            )
+            if expected_sha256 and cache_path.exists():
+                actual_sha256 = _sha256(cache_path)
+                if actual_sha256 != expected_sha256:
+                    cache_path.unlink(missing_ok=True)
+                    raise RuntimeError(
+                        f"Downloaded checkpoint hash mismatch for {url}: "
+                        f"expected {expected_sha256}, got {actual_sha256}. "
+                        "The cached file was removed; retry the download."
+                    )
+            return payload
+        except (OSError, RuntimeError, URLError) as exc:
+            last_error = exc
+            if isinstance(exc, RuntimeError) and cache_path.exists():
+                cache_path.unlink(missing_ok=True)
+            if attempt >= retries:
+                break
+            # GitHub release downloads can transiently reset through proxies/CDNs.
+            time.sleep(retry_delay_sec * attempt)
+
+    raise RuntimeError(f"Failed to download checkpoint from {url} after {retries} attempts.") from last_error
 
 
 def _strip_module_prefix(state_dict: dict[str, Any]) -> dict[str, Any]:
@@ -72,11 +133,12 @@ class GRLNetWeights:
         check_hash: bool = False,
     ) -> dict[str, torch.Tensor]:
         if self.url:
-            payload = load_state_dict_from_url(
+            payload = _load_state_dict_from_url_with_retries(
                 self.url,
                 map_location=map_location,
                 progress=progress,
                 check_hash=check_hash,
+                expected_sha256=self.meta.get("metrics", {}).get("ImageNet-1K", {}).get("sha256"),
             )
         elif self.checkpoint:
             payload = torch.load(Path(self.checkpoint), map_location=map_location, weights_only=False)
@@ -100,7 +162,7 @@ def load_checkpoint_state_dict(
     if isinstance(weights, str) and weights in GRLNetWeights.names():
         return GRLNetWeights.get(weights).get_state_dict(map_location=map_location, progress=progress)
     if isinstance(weights, str) and weights.startswith(("http://", "https://")):
-        payload = load_state_dict_from_url(weights, map_location=map_location, progress=progress)
+        payload = _load_state_dict_from_url_with_retries(weights, map_location=map_location, progress=progress)
         return extract_model_state_dict(payload, prefer_ema=prefer_ema)
     payload = torch.load(Path(weights), map_location=map_location, weights_only=False)
     return extract_model_state_dict(payload, prefer_ema=prefer_ema)

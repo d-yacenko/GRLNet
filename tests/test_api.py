@@ -37,3 +37,11 @@ def test_extract_prefers_ema_model():
 
 def test_weights_registry_has_default():
     assert GRLNetWeights.DEFAULT.name in GRLNetWeights.names()
+
+
+def test_default_weights_metadata_points_to_published_release():
+    assert "v0.3.0" in GRLNetWeights.DEFAULT.url
+    metrics = GRLNetWeights.DEFAULT.meta["metrics"]["ImageNet-1K"]
+    assert metrics["acc@1"] == 0.69768
+    assert metrics["acc@5"] == 0.88964
+    assert metrics["sha256"] == "75d586bdd5031fa8fa009fde618b133d5ad429e504cac81636c8daead01be4f2"

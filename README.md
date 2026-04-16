@@ -122,15 +122,29 @@ stabhrec40_a100_single_50e/
   *_best.pth            # local experiment checkpoint, not required for pip install
 ```
 
-## Weights Release Workflow
+## Weights
 
-The code already supports URL-based loading through
-`torch.hub.load_state_dict_from_url`. Before publishing a tagged release:
+Published weights are downloaded automatically through the standard PyTorch hub
+cache, similarly to torchvision model weights:
 
-1. Upload the final `.pth` checkpoint as a GitHub Release asset.
-2. Update `GRLNetWeights.IMAGENET1K_STABHREC40_A100_V1.url`.
-3. Update the final `acc@1`, `acc@5`, epoch count and recipe metadata.
-4. Tag the repository and verify `pip install "grlnet @ git+https://..."`.
+```python
+from grlnet import GRLNetWeights, grlnet_stabhrec40
+
+model = grlnet_stabhrec40(weights=GRLNetWeights.DEFAULT)
+```
+
+The default ImageNet-1K checkpoint is hosted as a GitHub Release asset and is
+cached under `~/.cache/torch/hub/checkpoints/` on first use. The loader verifies
+the published SHA256 checksum and retries transient network failures; users do
+not need `gh release download` or any manual checkpoint copy for normal use.
+
+Current default weights:
+
+- `GRLNetWeights.IMAGENET1K_STABHREC40_A100_V1`
+- release: `https://github.com/d-yacenko/GRLNet/releases/tag/v0.3.0`
+- checkpoint: `grlnet_stabhrec40_imagenet1k_a100_v2.pth`
+- ImageNet-1K `acc@1`: `0.69768`
+- ImageNet-1K `acc@5`: `0.88964`
 
 ## Documentation
 
