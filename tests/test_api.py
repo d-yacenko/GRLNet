@@ -51,4 +51,4 @@ def test_default_weights_metadata_points_to_published_release():
 
 
 def test_package_version_matches_release_series():
-    assert grlnet.__version__ == "0.3.0"
+    assert grlnet.__version__ == "0.4.0"

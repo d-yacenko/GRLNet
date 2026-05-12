@@ -1,0 +1,82 @@
+model:
+  name: stabhrec40_lite
+  stem_channels: 64
+  hidden_channels: 192
+  steps: 12
+  kernel_size: 3
+  forget_bias: 1.0
+  hidden_scale_init: -1.75
+  delta_scale_init: -2.75
+  aux_steps: 3
+  aux_hidden_dim: 256
+  main_dropout: 0.25
+  aux_dropout: 0.15
+  readout_mode: hc
+
+data:
+  train_root: /path/to/imagenet/train
+  eval_root: /path/to/imagenet/val
+  gold_root: ""
+  image_size: 224
+  eval_resize_size: 224
+  # Lite has 2.2× fewer parameters than dense — lift per-GPU batch to 176
+  # (vs dense phase-1's 96 with grad_accum=2 on the same A100 80GB).
+  per_gpu_batch_size: 176
+  per_gpu_eval_batch_size: 448
+  workers: 16
+  persistent_workers: true
+  prefetch_factor: 4
+  pin_memory: true
+  drop_last_train: true
+  train_limit: null
+  eval_limit: null
+  gold_limit: null
+
+train:
+  # Single-phase 200-epoch training from scratch.
+  # Recipe identical to the dense baseline (SGD+Nesterov + cosine LR + warmup
+  # + MixUp + label smoothing + EMA + AMP), only the cell-internal conv operator
+  # is depthwise-separable. The longer schedule (200 vs 120 used for dense)
+  # gives the Lite operator more iterations to converge — the trade-off for
+  # the operator-level capacity reduction.
+  epochs: 200
+  grad_accum_steps: 1
+  gradient_clip_norm: 5.0
+  use_amp: true
+  benchmark: true
+  channels_last: true
+  eval_on_main_rank_only: false
+  label_smoothing: 0.05
+  mixup_alpha: 0.2
+  mixup_prob: 0.5
+  ema_decay: 0.999
+  warmup_epochs: 5
+  aux_weight: 0.2
+  aux_weight_final: 0.05
+
+optimizer:
+  lr: 0.08
+  weight_decay: 0.0001
+  momentum: 0.9
+
+logging:
+  progress_every_batches: 200
+  progress_every_samples: 0
+  jsonl_filename: progress.jsonl
+
+checkpointing:
+  output_dir: runs/stabhrec40_lite_a100_single_200e
+  checkpoint_prefix: stabhrec40_lite_a100_single_200e
+  save_every_epoch: true
+  save_best: true
+  save_best_gold: false
+  # Auto-resume: if the 200-epoch run hits the 8-day slurm wall, simply
+  # resubmit the same script — RESUME=auto picks up the latest checkpoint.
+  resume_from: auto
+
+runtime:
+  seed: 42
+  device: cuda:0
+  ddp_backend: nccl
+  ddp_timeout_minutes: 60
+  tf32: true

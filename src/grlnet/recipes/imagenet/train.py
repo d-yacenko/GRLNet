@@ -19,7 +19,7 @@ from torch.utils.data.distributed import DistributedSampler
 from torchvision import transforms
 from torchvision.datasets import ImageFolder
 
-from grlnet.models import GRLNet
+from grlnet.models import GRLNet, GRLNetLite
 
 from .checkpointing import (
     normalize_state_dict_keys,
@@ -268,10 +268,8 @@ def maybe_to_channels_last(x: torch.Tensor, *, enabled: bool) -> torch.Tensor:
     return x
 
 
-def build_model(config: RecipeConfig, num_classes: int) -> GRLNet:
-    if config.model.name != "stabhrec40":
-        raise ValueError(f"Unknown model: {config.model.name}")
-    return GRLNet(
+def build_model(config: RecipeConfig, num_classes: int) -> GRLNet | GRLNetLite:
+    common_kwargs = dict(
         num_classes=num_classes,
         stem_channels=config.model.stem_channels,
         hidden_channels=config.model.hidden_channels,
@@ -285,6 +283,14 @@ def build_model(config: RecipeConfig, num_classes: int) -> GRLNet:
         hidden_scale_init=config.model.hidden_scale_init,
         delta_scale_init=config.model.delta_scale_init,
         readout_mode=config.model.readout_mode,
+    )
+    if config.model.name == "stabhrec40":
+        return GRLNet(**common_kwargs)
+    if config.model.name == "stabhrec40_lite":
+        return GRLNetLite(**common_kwargs)
+    raise ValueError(
+        f"Unknown model: {config.model.name!r}. "
+        "Supported: 'stabhrec40' (dense baseline) or 'stabhrec40_lite' (depthwise-separable variant)."
     )
 
 

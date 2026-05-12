@@ -1,6 +1,19 @@
-# Model Card: GRLNet/StabHRec40
+# Model Card: GRLNet/StabHRec40 (dense) and GRLNet/StabHRec40-Lite (depthwise-separable)
 
-## Model Details
+This card describes two ImageNet-1K-trained variants of the GRLNet/StabHRec40
+architecture family:
+
+1. **StabHRec40 (dense, baseline)** — released in `v0.3.0`.
+2. **StabHRec40-Lite (depthwise-separable)** — released in `v0.4.0`.
+
+Both share the same architectural skeleton (one stabilized recurrent cell ×
+12 unroll steps, H/C two-stream cell, residual stabilizers, late readout) and
+the same training recipe (SGD+Nesterov, cosine LR with warmup, MixUp, label
+smoothing, EMA, AMP). They differ only in how the three k=3 convolutions
+inside the recurrent cell are implemented (dense vs depthwise-separable),
+trading ~2.2× parameters and ~7.9× compute for a small accuracy delta.
+
+## Model Details — StabHRec40 (dense)
 
 - Model family: GRLNet, a Gated Recurrent Latent Network for image
   classification.
@@ -10,9 +23,21 @@
 - Input: RGB tensor `[B, 3, H, W]`, evaluated and trained with 224x224 crops.
 - Output: class logits `[B, num_classes]`.
 - Default weights: `GRLNetWeights.DEFAULT`.
-- Release: `v0.3.0`.
+- Release: `v0.3.0` (carried forward in `v0.4.0`, no checkpoint change).
 - Checkpoint: `grlnet_stabhrec40_imagenet1k_a100_v2.pth`.
 - SHA256: `75d586bdd5031fa8fa009fde618b133d5ad429e504cac81636c8daead01be4f2`.
+
+## Model Details — StabHRec40-Lite (depthwise-separable)
+
+- Public architecture: StabHRec40-Lite. The dense k=3 convolutions inside the
+  recurrent cell (one gate-conv channels→4·channels and two delta-branch
+  channels→channels) are replaced by depthwise-separable pairs (DW3×3 + PW1×1).
+- All other components are identical to the dense baseline (stem, h-seed,
+  GroupNorms, SiLU, gates, residual scalars, late readout, auxiliary head).
+- Default weights: `GRLNetLiteWeights.DEFAULT`.
+- Release: `v0.4.0`.
+- Checkpoint: `grlnet_stabhrec40_lite_imagenet1k_a100_v1.pth` (pending — URL and
+  SHA256 are populated when the full ImageNet-1K training run completes).
 
 ## Architecture Summary
 
@@ -31,12 +56,14 @@ transforms per step.
 
 ImageNet-1K validation, single-crop evaluation:
 
-| metric | value |
-| --- | ---: |
-| acc@1 | 0.69768 |
-| acc@5 | 0.88964 |
-| parameters | 3.25M |
-| training epochs | 120 |
+| | StabHRec40 (dense) | StabHRec40-Lite |
+|---|---:|---:|
+| acc@1 | 0.69768 | (pending) |
+| acc@5 | 0.88964 | (pending) |
+| parameters | 3,249,298 | 1,485,010 |
+| GMAC (T=12, 224×224) | ≈ 76.05 | ≈ 9.66 |
+| training epochs | 120 | 200 (planned) |
+| hardware | NVIDIA A100 80GB | NVIDIA A100 80GB |
 
 ## Training Recipe
 
@@ -56,14 +83,33 @@ Main recipe components:
 
 ## Intended Use
 
-GRLNet/StabHRec40 is intended for image-classification research, transfer
-learning experiments, compact-model comparisons, and recurrent-computation
-ablation studies. The public API follows torchvision-style factory functions:
+GRLNet is intended for image-classification research, transfer learning
+experiments, compact-model comparisons, and recurrent-computation ablation
+studies. The public API follows torchvision-style factory functions:
 
 ```python
 from grlnet import GRLNetWeights, grlnet_stabhrec40
 
+# Dense baseline (v0.3.0 checkpoint)
 model = grlnet_stabhrec40(weights=GRLNetWeights.DEFAULT)
+```
+
+```python
+from grlnet import GRLNetLiteWeights, grlnet_stabhrec40_lite
+
+# Depthwise-separable Lite variant (v0.4.0+, checkpoint pending)
+model = grlnet_stabhrec40_lite(weights=GRLNetLiteWeights.DEFAULT)
+```
+
+Or via `torch.hub`:
+
+```python
+import torch
+
+dense = torch.hub.load("d-yacenko/GRLNet", "grlnet_stabhrec40",
+                       weights="DEFAULT", trust_repo=True).eval()
+lite  = torch.hub.load("d-yacenko/GRLNet", "grlnet_stabhrec40_lite",
+                       weights="DEFAULT", trust_repo=True).eval()
 ```
 
 ## Limitations

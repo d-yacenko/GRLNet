@@ -212,8 +212,61 @@ GRLNetWeights.IMAGENET1K_STABHREC40_A100_V1 = GRLNetWeights(
 GRLNetWeights.DEFAULT = GRLNetWeights.IMAGENET1K_STABHREC40_A100_V1
 
 
+@dataclass(frozen=True)
+class GRLNetLiteWeights(GRLNetWeights):
+    """Registry of published checkpoints for the GRLNet/StabHRec40-Lite variant.
+
+    Separate registry namespace so ``GRLNetWeights.names()`` and
+    ``GRLNetLiteWeights.names()`` stay independent. Both share the same
+    download-and-verify code path inherited from ``GRLNetWeights``.
+    """
+
+    _registry: ClassVar[dict[str, "GRLNetLiteWeights"]] = {}
+
+
+GRLNetLiteWeights.IMAGENET1K_STABHREC40_LITE_A100_V1 = GRLNetLiteWeights(
+    name="IMAGENET1K_STABHREC40_LITE_A100_V1",
+    # URL will be populated after the first published v0.4.0 release.
+    url=None,
+    prefer_ema=True,
+    meta={
+        "dataset": "ImageNet-1K",
+        "architecture": "GRLNet/StabHRec40-Lite",
+        "num_params": 1_485_010,
+        "recipe": "src/grlnet/recipes/imagenet/configs/stabhrec40_lite_a100_single_200e.yaml",
+        "model_kwargs": {
+            "num_classes": 1000,
+            "stem_channels": 64,
+            "hidden_channels": 192,
+            "steps": 12,
+            "kernel_size": 3,
+            "forget_bias": 1.0,
+            "hidden_scale_init": -1.75,
+            "delta_scale_init": -2.75,
+            "aux_steps": 3,
+            "aux_hidden_dim": 256,
+            "main_dropout": 0.25,
+            "aux_dropout": 0.15,
+            "readout_mode": "hc",
+        },
+        "metrics": {
+            "ImageNet-1K": {
+                "acc@1": None,  # TBD after full A100 120-epoch training
+                "acc@5": None,
+                "epoch": None,
+                "sha256": None,
+                "note": "Pending: full ImageNet-1K training run (v0.4.0).",
+            }
+        },
+    },
+)
+
+GRLNetLiteWeights.DEFAULT = GRLNetLiteWeights.IMAGENET1K_STABHREC40_LITE_A100_V1
+
+
 __all__ = [
     "GRLNetWeights",
+    "GRLNetLiteWeights",
     "extract_model_state_dict",
     "load_checkpoint_state_dict",
 ]
