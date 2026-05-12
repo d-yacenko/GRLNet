@@ -22,8 +22,18 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_DIR="${REPO_DIR:-$(cd "$SCRIPT_DIR/../../.." && pwd)}"
+# Under slurm, sbatch copies this script to /var/spool/slurmd/... so
+# ${BASH_SOURCE[0]} dirname-detection breaks. Prefer SLURM_SUBMIT_DIR (the
+# directory from which sbatch was invoked — should be the repo root) and
+# fall back to BASH_SOURCE only for direct (non-slurm) invocation.
+if [[ -n "${REPO_DIR:-}" ]]; then
+  :
+elif [[ -n "${SLURM_SUBMIT_DIR:-}" ]]; then
+  REPO_DIR="$SLURM_SUBMIT_DIR"
+else
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  REPO_DIR="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+fi
 
 # Use the 200-epoch Lite config and a dedicated output directory.
 export CONFIG_PATH="${CONFIG_PATH:-$REPO_DIR/src/grlnet/recipes/imagenet/configs/stabhrec40_lite_a100_single_200e.yaml}"

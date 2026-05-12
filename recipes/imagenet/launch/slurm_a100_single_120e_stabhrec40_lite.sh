@@ -16,8 +16,18 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_DIR="${REPO_DIR:-$(cd "$SCRIPT_DIR/../../.." && pwd)}"
+# Under slurm, sbatch copies this script to /var/spool/slurmd/... so
+# ${BASH_SOURCE[0]} dirname-detection breaks. Prefer SLURM_SUBMIT_DIR (the
+# directory from which sbatch was invoked — should be the repo root) and
+# fall back to BASH_SOURCE only for direct (non-slurm) invocation.
+if [[ -n "${REPO_DIR:-}" ]]; then
+  :
+elif [[ -n "${SLURM_SUBMIT_DIR:-}" ]]; then
+  REPO_DIR="$SLURM_SUBMIT_DIR"
+else
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  REPO_DIR="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+fi
 
 # Use the Lite recipe config and a Lite-specific output directory; the
 # rest of the launcher logic (env vars, optional overrides, etc.) is shared
