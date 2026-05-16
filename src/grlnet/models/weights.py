@@ -264,9 +264,153 @@ GRLNetLiteWeights.IMAGENET1K_STABHREC40_LITE_A100_V1 = GRLNetLiteWeights(
 GRLNetLiteWeights.DEFAULT = GRLNetLiteWeights.IMAGENET1K_STABHREC40_LITE_A100_V1
 
 
+# ----------------------------------------------------------------------
+# INT8 (post-training-quantized) ONNX weights — separate from torch
+# state-dicts because INT8 graphs are loaded via onnxruntime, not
+# torch.nn.Module. Provide a small helper to download + verify the ONNX
+# file from the GitHub Release; loading is the user's responsibility
+# (typically via `onnxruntime.InferenceSession`).
+# ----------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class GRLNetINT8Weights:
+    """Registry of post-training-quantized (INT8 ONNX) StabHRec40 checkpoints.
+
+    Unlike :class:`GRLNetWeights`, these are ONNX files (not torch state
+    dicts) intended to be loaded via :class:`onnxruntime.InferenceSession`.
+    The dense INT8 v3 entry corresponds to the per-tensor + Percentile-99.99
+    calibration that achieves a ``-1.30`` pp Top-1 drop versus FP32 on a
+    1000-image stratified ImageNet val (paper Table tab:int8-ablation).
+    """
+
+    name: str
+    url: str | None = None
+    sha256: str | None = None
+    meta: dict[str, Any] = field(default_factory=dict)
+
+    _registry: ClassVar[dict[str, "GRLNetINT8Weights"]] = {}
+
+    def __post_init__(self) -> None:
+        type(self)._registry[self.name] = self
+
+    @classmethod
+    def get(cls, name: str) -> "GRLNetINT8Weights":
+        if name.upper() == "DEFAULT" and hasattr(cls, "DEFAULT"):
+            return cls.DEFAULT
+        try:
+            return cls._registry[name]
+        except KeyError as exc:
+            available = ", ".join(sorted(cls.names()))
+            raise KeyError(f"Unknown GRLNetINT8Weights entry {name!r}. Available: {available}") from exc
+
+    @classmethod
+    def names(cls) -> set[str]:
+        names = set(cls._registry)
+        if hasattr(cls, "DEFAULT"):
+            names.add("DEFAULT")
+        return names
+
+    def download(self, *, progress: bool = True, check_hash: bool = True) -> Path:
+        """Download the ONNX file via torch.hub cache and return its local path."""
+        if not self.url:
+            raise RuntimeError(
+                f"INT8 entry {self.name!r} has no URL yet. Publish the ONNX as a GitHub "
+                "Release asset and set its URL here."
+            )
+        cache_path = _default_checkpoint_path(self.url)
+        if cache_path.exists() and check_hash and self.sha256:
+            actual = _sha256(cache_path)
+            if actual != self.sha256:
+                cache_path.unlink(missing_ok=True)
+        if not cache_path.exists():
+            from urllib.request import urlretrieve
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            if progress:
+                print(f"Downloading {self.url} -> {cache_path}")
+            urlretrieve(self.url, str(cache_path))
+            if check_hash and self.sha256:
+                actual = _sha256(cache_path)
+                if actual != self.sha256:
+                    cache_path.unlink(missing_ok=True)
+                    raise RuntimeError(
+                        f"Downloaded ONNX hash mismatch for {self.name!r}: "
+                        f"expected {self.sha256}, got {actual}"
+                    )
+        return cache_path
+
+
+GRLNetINT8Weights.IMAGENET1K_STABHREC40_A100_V3_INT8 = GRLNetINT8Weights(
+    name="IMAGENET1K_STABHREC40_A100_V3_INT8",
+    url="https://github.com/d-yacenko/GRLNet/releases/download/v0.4.0/stabhrec40_untied_dealiased_v3_pertensor_percentile.onnx",
+    sha256="69d383f383fbe04d91105ba3343de250dc1faf24939d515455696975226bdc65",
+    meta={
+        "dataset": "ImageNet-1K",
+        "architecture": "GRLNet/StabHRec40 (untied, dealiased, INT8 PTQ)",
+        "calibrator": "ORT QDQ Percentile-99.99, per-tensor weights, raw graph (no pre-process)",
+        "size_mb": 24.8,
+        "compression_ratio_vs_fp32": 3.85,
+        "metrics": {
+            "ImageNet-1K-1000img-stratified": {
+                "fp32_top1": 0.6950,
+                "int8_top1": 0.6820,
+                "delta_top1_pp": -1.30,
+                "note": "Best of 6-variant ablation; v3_pertensor_percentile.",
+            }
+        },
+        "deployment": "Load via `onnxruntime.InferenceSession(path, providers=['CPUExecutionProvider'])`. "
+                       "Inputs: float32 tensor [1,3,224,224] (ImageNet normalization).",
+    },
+)
+
+GRLNetINT8Weights.DEFAULT = GRLNetINT8Weights.IMAGENET1K_STABHREC40_A100_V3_INT8
+
+
+def load_grlnet_int8_session(
+    weights: "GRLNetINT8Weights | str | Path" = "DEFAULT",
+    *,
+    providers: list[str] | None = None,
+    progress: bool = True,
+):
+    """Return an ``onnxruntime.InferenceSession`` for the INT8 StabHRec40 ONNX.
+
+    The ONNX file is downloaded from the GitHub Release on first call (cached
+    under ``~/.cache/torch/hub/checkpoints``) and SHA256-verified.
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> from grlnet.models.weights import load_grlnet_int8_session
+    >>> sess = load_grlnet_int8_session()  # downloads INT8 ONNX once, cached
+    >>> x = np.random.randn(1, 3, 224, 224).astype("float32")  # ImageNet-normalized
+    >>> logits = sess.run(["output"], {"input": x})[0]
+    """
+    try:
+        import onnxruntime as ort
+    except ImportError as exc:
+        raise RuntimeError(
+            "load_grlnet_int8_session() requires onnxruntime. "
+            "Install with: pip install onnxruntime"
+        ) from exc
+
+    if isinstance(weights, GRLNetINT8Weights):
+        entry = weights
+    elif isinstance(weights, str) and weights in GRLNetINT8Weights.names():
+        entry = GRLNetINT8Weights.get(weights)
+    elif isinstance(weights, (str, Path)) and Path(weights).exists():
+        # Direct path to an ONNX file
+        return ort.InferenceSession(str(weights), providers=providers or ["CPUExecutionProvider"])
+    else:
+        raise ValueError(f"Unknown weights argument: {weights!r}")
+
+    onnx_path = entry.download(progress=progress)
+    return ort.InferenceSession(str(onnx_path), providers=providers or ["CPUExecutionProvider"])
+
+
 __all__ = [
     "GRLNetWeights",
     "GRLNetLiteWeights",
+    "GRLNetINT8Weights",
+    "load_grlnet_int8_session",
     "extract_model_state_dict",
     "load_checkpoint_state_dict",
 ]

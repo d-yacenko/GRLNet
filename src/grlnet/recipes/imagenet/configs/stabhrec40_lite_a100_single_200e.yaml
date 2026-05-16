@@ -19,10 +19,15 @@ data:
   gold_root: ""
   image_size: 224
   eval_resize_size: 224
-  # Lite has 2.2× fewer parameters than dense — lift per-GPU batch to 176
-  # (vs dense phase-1's 96 with grad_accum=2 on the same A100 80GB).
-  per_gpu_batch_size: 176
-  per_gpu_eval_batch_size: 448
+  # Empirical: A100 80GB OOMs at batch=176 with 12-step BPTT through the DS cell
+  # (DW conv keeps in_ch × spatial intermediates separately from PW outputs).
+  # Dense baseline runs at batch=176/grad_accum=1 (phase 2-3 slurm scripts),
+  # but for Lite we drop to batch=128/grad_accum=1 — no accumulation artifacts
+  # (BN stats, MixUp ratio, EMA timing all step-exact), at the cost of ~30% smaller
+  # effective batch vs dense. PYTORCH_CUDA_ALLOC_CONF=expandable_segments helps
+  # further with fragmentation from DS-conv activation patterns.
+  per_gpu_batch_size: 128
+  per_gpu_eval_batch_size: 256
   workers: 16
   persistent_workers: true
   prefetch_factor: 4

@@ -19,10 +19,10 @@ data:
   gold_root: ""
   image_size: 224
   eval_resize_size: 224
-  # Lite has 2.2× fewer parameters than dense, allowing a larger batch on
-  # the same A100 80GB hardware. Per-GPU batch lifted from 96 → 176.
-  per_gpu_batch_size: 176
-  per_gpu_eval_batch_size: 448
+  # See 200e config notes — A100 80GB OOMs at batch=176, we use batch=128/grad_accum=1
+  # for the Lite variant (no accumulation artifacts).
+  per_gpu_batch_size: 128
+  per_gpu_eval_batch_size: 256
   workers: 16
   persistent_workers: true
   prefetch_factor: 4

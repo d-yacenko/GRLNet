@@ -15,10 +15,12 @@ from .stabhrec40_lite import (
     warm_start_from_dense,
 )
 from .weights import (
+    GRLNetINT8Weights,
     GRLNetLiteWeights,
     GRLNetWeights,
     extract_model_state_dict,
     load_checkpoint_state_dict,
+    load_grlnet_int8_session,
 )
 
 __all__ = [

@@ -36,9 +36,12 @@ export CONFIG_PATH="${CONFIG_PATH:-$REPO_DIR/src/grlnet/recipes/imagenet/configs
 export OUTPUT_DIR="${OUTPUT_DIR:-$REPO_DIR/runs/stabhrec40_lite_a100_single_120e}"
 
 # Match the YAML defaults explicitly so env overrides are intentional, not silent.
-export TRAIN_BATCH_SIZE="${TRAIN_BATCH_SIZE:-176}"
-export EVAL_BATCH_SIZE="${EVAL_BATCH_SIZE:-448}"
+export TRAIN_BATCH_SIZE="${TRAIN_BATCH_SIZE:-128}"
+export EVAL_BATCH_SIZE="${EVAL_BATCH_SIZE:-256}"
 export GRAD_ACCUM_STEPS="${GRAD_ACCUM_STEPS:-1}"
+
+# Reduce CUDA allocator fragmentation; helpful for 12-step BPTT activation patterns.
+export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
 export EPOCHS="${EPOCHS:-120}"
 export LR="${LR:-0.08}"
 export WEIGHT_DECAY="${WEIGHT_DECAY:-0.0001}"
