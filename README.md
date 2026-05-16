@@ -3,10 +3,11 @@
 GRLNet is a compact recurrent image classifier for PyTorch. The repository
 publishes two ImageNet-1K-trained variants of the same architectural skeleton:
 
-| variant | torch.hub entry | params | GMAC (T=12) | acc@1 | release |
+| variant | loader | params | GMAC (T=12) | acc@1 | release |
 | --- | --- | ---: | ---: | ---: | --- |
 | **StabHRec40** (dense baseline) | `grlnet_stabhrec40` | 3.25 M | ≈ 76.05 | 69.768% | `v0.3.0` |
 | **StabHRec40-Lite** (depthwise-separable) | `grlnet_stabhrec40_lite` | 1.49 M | ≈ 9.66 | (pending) | `v0.4.0` |
+| **StabHRec40-INT8** (PTQ, ONNX) | `load_grlnet_int8_session` | 3.25 M | ≈ 76.05 | 68.47% (−1.30 pp) | `v0.4.0` |
 
 Both share the same recurrent cell × 12 unroll skeleton, the same training
 recipe (SGD+Nesterov, cosine LR with warmup, MixUp, label smoothing, EMA,
@@ -26,6 +27,18 @@ from grlnet import GRLNetLiteWeights, grlnet_stabhrec40_lite
 # Lite variant (v0.4.0; checkpoint URL populated once the full A100 run completes)
 model = grlnet_stabhrec40_lite(weights=GRLNetLiteWeights.DEFAULT)
 model.eval()
+```
+
+```python
+import numpy as np
+from grlnet import load_grlnet_int8_session
+
+# INT8 deployment (v0.4.0; per-tensor + Percentile-99.99 PTQ, 24.8 MB,
+# −1.30 pp Top-1 vs FP32). Returns an onnxruntime InferenceSession;
+# checkpoint is downloaded on first call and SHA256-verified.
+sess = load_grlnet_int8_session()
+x = np.random.randn(1, 3, 224, 224).astype("float32")
+logits = sess.run(["output"], {"input": x})[0]   # shape: (1, 1000)
 ```
 
 ## Model
@@ -159,13 +172,10 @@ Recipe features include SGD/Nesterov, warmup plus cosine schedule, mixup, label
 smoothing, late auxiliary supervision, EMA evaluation/checkpoints, AMP,
 channels-last CUDA execution, and JSONL progress logging.
 
-Slurm launch templates in `recipes/imagenet/launch/`:
-
-- `slurm_a100_single_50e_stabhrec40.sh` — dense phase 1 (50 epochs)
-- `slurm_a100_single_70e_resume20_stabhrec40.sh` — dense phase 2 lift
-- `slurm_a100_single_120e_resume50_stabhrec40.sh` — dense phase 3 flat tail
-- `slurm_a100_single_120e_stabhrec40_lite.sh` — Lite single-phase 120-epoch run (ablation)
-- `slurm_a100_single_200e_stabhrec40_lite.sh` — Lite single-phase 200-epoch run (recommended, auto-resume on slurm wall)
+Slurm wrappers used to launch these recipes on the authors' A100 cluster
+(paths, partitions, and resource limits are site-specific) are not shipped
+with the package; the YAML configs above are the portable artifacts and run
+unchanged through `grlnet-train-imagenet` on any single-node A100 80 GB host.
 
 ## Examples
 
